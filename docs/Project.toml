@@ -1,0 +1,6 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+JCGEBlocks = "e7e2410e-b632-4869-8943-8241db0dfb31"
+
+[sources]
+JCGEBlocks = { path = ".." }
