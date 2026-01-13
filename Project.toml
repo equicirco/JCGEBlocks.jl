@@ -1,7 +1,7 @@
 name = "JCGEBlocks"
 uuid = "e7e2410e-b632-4869-8943-8241db0dfb31"
 authors = ["Riccardo Boero <ribo@nilu.no>"]
-version = "0.0.0"
+version = "0.1.0"
 
 [deps]
 JCGECore = "9fb9d605-0ed3-4980-82c1-f0874844db5d"
