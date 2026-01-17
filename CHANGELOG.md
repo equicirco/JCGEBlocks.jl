@@ -10,10 +10,11 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-01-17
 ### Added
-- Project layout and package boundaries.
-- Initial block-based modeling interfaces and RunSpec structure.
-- Calibration and output utilities with canonical data schema.
-- Example models and integration tests.
-- Documentation scaffolding and package docs.
+- Core CGE block catalog covering production (CD, Leontief, sector PF, multilabor), trade (Armington, CET, export demand, nontraded supply), and market-clearing blocks.
+- Institution blocks for households, government, saving, investment, and utility with regional and income variants where applicable.
+- Price linkage, numeraire, closure, and price/index composition blocks for equilibrium bookkeeping.
+- External balance, foreign trade, and remittances support for open-economy setups.
+- Activity analysis, commodity market clearing, and initial-value helpers for model setup and validation.
+- Helper constructors and MCP-compatible constraint wiring for consistent block assembly.
