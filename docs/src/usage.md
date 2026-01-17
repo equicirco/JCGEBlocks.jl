@@ -1,6 +1,7 @@
 # Usage
 
-`JCGEBlocks` provides reusable blocks that emit equation ASTs and variables.
+`JCGEBlocks` provides reusable blocks that emit equation ASTs and variables for
+the [JCGE](https://jcge.org) framework.
 
 ## Build blocks
 
@@ -21,4 +22,3 @@ CES, Leontief, etc.). Some blocks support per-entity mappings via a Dict.
 
 Blocks can emit MCP-compatible constraints when `mcp=true` is supplied in params
 for models solved with PATHSolver.
-

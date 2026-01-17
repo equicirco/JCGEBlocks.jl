@@ -10,10 +10,10 @@
 A Computable General Equilibrium (CGE) model is a quantitative economic model that represents an economy as interconnected markets for goods and services, factors of production, institutions, and the rest of the world. It is calibrated with data (typically a Social Accounting Matrix) and solved numerically as a system of nonlinear equations until equilibrium conditions (zero-profit, market-clearing, and income-balance) hold within tolerance.
 
 ## What is JCGE?
-JCGE is a block-based CGE modeling and execution framework in Julia. It defines a shared RunSpec structure and reusable blocks so models can be assembled, validated, solved, and compared consistently across packages.
+JCGE is a block-based CGE modeling and execution framework in Julia. It defines a shared RunSpec structure and reusable blocks so models can be assembled, validated, solved, and compared consistently across packages. See https://jcge.org for details.
 
 ## What is this package?
-Standard CGE blocks built on the JCGE interfaces.
+Standard CGE blocks built on the JCGE interfaces (https://jcge.org).
 
 ## Responsibilities
 - Production blocks (nested production functions)
@@ -22,7 +22,44 @@ Standard CGE blocks built on the JCGE interfaces.
 - Market clearing blocks
 
 ## Dependencies
-- Depends on JCGECore, JCGERuntime
+- Depends on JCGECore, JCGERuntime, and the broader JCGE stack (https://jcge.org)
+
+## How to cite
+
+If you use the JCGE framework, please cite:
+
+Boero, R. *JCGE - Julia Computable General Equilibrium Framework* [software], 2026.
+DOI: 10.5281/zenodo.18282436
+URL: https://JCGE.org
+
+```bibtex
+@software{boero_jcge_2026,
+  title  = {JCGE - Julia Computable General Equilibrium Framework},
+  author = {Boero, Riccardo},
+  year   = {2026},
+  doi    = {10.5281/zenodo.18282436},
+  url    = {https://JCGE.org}
+}
+```
+
+If you use this package, please cite:
+
+Boero, R. *JCGEBlocks.jl - Reusable CGE blocks for JCGE.* [software], 2026.
+DOI: pending
+URL: https://equicirco.github.io/JCGEBlocks.jl/
+SourceCode: https://github.com/equicirco/JCGEBlocks.jl
+
+```bibtex
+@software{boero_jcgeblocks_2026,
+  title  = {JCGEBlocks.jl - Reusable CGE blocks for JCGE.},
+  author = {Boero, Riccardo},
+  year   = {2026},
+  doi    = {pending},
+  url    = {https://equicirco.github.io/JCGEBlocks.jl/}
+}
+```
+
+If you use a specific tagged release, please cite the version DOI assigned on Zenodo for that release (preferred for exact reproducibility).
 
 ## Naming and functional forms
 Block names are composed as `Domain + Role + FunctionalForm` when relevant.
