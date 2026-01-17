@@ -46,7 +46,7 @@ If you use this package, please cite:
 
 Boero, R. *JCGEBlocks.jl - Reusable CGE blocks for JCGE.* [software], 2026.
 DOI: pending
-URL: https://equicirco.github.io/JCGEBlocks.jl/
+URL: https://blocks.jcge.org
 SourceCode: https://github.com/equicirco/JCGEBlocks.jl
 
 ```bibtex
@@ -55,7 +55,7 @@ SourceCode: https://github.com/equicirco/JCGEBlocks.jl
   author = {Boero, Riccardo},
   year   = {2026},
   doi    = {pending},
-  url    = {https://equicirco.github.io/JCGEBlocks.jl/}
+  url    = {https://blocks.jcge.org}
 }
 ```
 

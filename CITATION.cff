@@ -15,7 +15,7 @@ identifiers:
     value: ''
     description: This DOI represents all software versions.
 repository-code: 'https://github.com/equicirco/JCGEBlocks.jl'
-url: 'https://equicirco.github.io/JCGEBlocks.jl/'
+url: 'https://Blocks.JCGE.org'
 abstract: >-
   JCGEBlocks.jl provides reusable, model-agnostic CGE building blocks with configurable functional forms and metadata for validation and reporting.
 keywords:
