@@ -45,7 +45,7 @@ URL: https://JCGE.org
 If you use this package, please cite:
 
 Boero, R. *JCGEBlocks.jl - Reusable CGE blocks for JCGE.* [software], 2026.
-DOI: pending
+DOI: 10.5281/zenodo.18290873
 URL: https://blocks.jcge.org
 SourceCode: https://github.com/equicirco/JCGEBlocks.jl
 
@@ -54,7 +54,7 @@ SourceCode: https://github.com/equicirco/JCGEBlocks.jl
   title  = {JCGEBlocks.jl - Reusable CGE blocks for JCGE.},
   author = {Boero, Riccardo},
   year   = {2026},
-  doi    = {pending},
+  doi    = {10.5281/zenodo.18290873},
   url    = {https://blocks.jcge.org}
 }
 ```
