@@ -96,26 +96,47 @@ util = utility_regional(:utility, goods_by_region, (alpha=alpha,))
 world = international_market(:world, goods, regions, mapping)
 ```
 
-## Block catalog (planned)
-- Production: `ProductionCDBlock`, `ProductionCESBlock`, `ProductionLeontiefBlock` (with `ProductionBlock(form=...)`)
-- Production (sectoral factor prices): `ProductionCDLeontiefSectorPFBlock`
-- Factor supply/endowment: fixed factor availability (labor/capital) and shocks
-- Government: `GovernmentBudgetBlock` (taxes, spending, saving)
-- Government budget balance: `GovernmentBudgetBalanceBlock`
-- Investment: `InvestmentDemandBlock`, savings-investment identity
-- Investment composition/allocation: `CompositeInvestmentBlock`, `InvestmentAllocationBlock`
-- Household: `HouseholdDemandBlock`, `UtilityCDBlock`/`UtilityCESBlock`, private saving
-- Household income demand: `HouseholdDemandIncomeBlock`
-- Trade/Armington: `ArmingtonCESBlock`
-- Transformation/CET: `TransformationCETBlock`
-- Monopoly rent: `MonopolyRentBlock`
-- Import quotas: `ImportQuotaBlock`
-- Prices: `WorldPriceLinkBlock`, `ExchangeRateLinkBlock`
-- External balance: balance of payments (foreign savings)
-- Market clearing: `GoodsMarketClearingBlock`, `CompositeMarketClearingBlock`, `FactorMarketClearingBlock`
-- Activity analysis (fixed coefficients): `ActivityAnalysisBlock`
-- Endowment-based CD demand: `ConsumerEndowmentCDBlock`
-- Commodity market clearing (MPSGE-style): `CommodityMarketClearingBlock`
-- Factor mobility/capital stock: `MobileFactorMarketBlock`, `CapitalStockReturnBlock`
-- Composite consumption/price level: `CompositeConsumptionBlock`, `PriceLevelBlock`
-- Closure: numeraire + macro closure choices
+## Block catalog
+
+- Production and activity: `ProductionBlock`, `ProductionCDBlock`,
+  `ProductionCDLeontiefBlock`, `ProductionCDLeontiefSectorPFBlock`,
+  `ProductionMultilaborCDBlock`, `ActivityAnalysisBlock`, and
+  `ActivityPriceIOBlock`.
+- Factor markets: `FactorSupplyBlock`, `FactorMarketClearingBlock`,
+  `LaborMarketClearingBlock`, `MobileFactorMarketBlock`,
+  `CapitalStockReturnBlock`, and `RegionalFactorAvailabilityBlock`.
+- Households and utility: `HouseholdDemandBlock`, `HouseholdDemandCDBlock`,
+  `HouseholdDemandCDXpBlock`, `HouseholdDemandCDHHBlock`,
+  `HouseholdDemandCDXpRegionalBlock`, `HouseholdDemandIncomeBlock`,
+  `RegionalHouseholdIncomeDemandBlock`, `UtilityBlock`, `UtilityCDBlock`,
+  `UtilityCDXpBlock`, `UtilityCDHHBlock`, and `UtilityCDRegionalBlock`.
+- Government, saving, and investment: `GovernmentBlock`,
+  `GovernmentRegionalBlock`, `RegionalGovernmentDemandBlock`,
+  `GovernmentBudgetBalanceBlock`, `GovernmentFinanceBlock`,
+  `GovernmentRevenueBlock`, `PrivateSavingBlock`, `PrivateSavingRegionalBlock`,
+  `PrivateSavingIncomeBlock`, `RegionalPrivateSavingIncomeBlock`,
+  `InvestmentBlock`, `InvestmentRegionalBlock`,
+  `RegionalFixedInvestmentDemandBlock`, `CompositeInvestmentBlock`,
+  `InvestmentAllocationBlock`, `RegionalInvestmentPoolBlock`, and
+  `SavingsInvestmentBlock`.
+- Trade and external accounts: `ArmingtonCESBlock`, `ArmingtonMXxdBlock`,
+  `TransformationCETBlock`, `CETXXDEBlock`, `MultiRegionTradeBlock`,
+  `TradeRoute`, `ForeignTradeBlock`, `ExportDemandBlock`, `NontradedSupplyBlock`,
+  `ImportQuotaBlock`, `ExternalBalanceBlock`, `ExternalBalanceVarPriceBlock`,
+  `ExternalBalanceRemitBlock`, `RegionalExternalAccountBlock`, and
+  `InternationalMarketBlock`.
+- Prices and closures: `PriceLinkBlock`, `PriceEqualityBlock`,
+  `ExchangeRateLinkBlock`, `ExchangeRateLinkRegionBlock`, `PriceIndexBlock`,
+  `PriceLevelBlock`, `PriceAggregationBlock`, `TradePriceLinkBlock`,
+  `NumeraireBlock`, and `ClosureBlock`.
+- Market and final-demand accounting: `MarketClearingBlock`,
+  `GoodsMarketClearingBlock`, `CommodityMarketClearingBlock`,
+  `CompositeMarketClearingBlock`, `RegionalCompositeMarketClearingBlock`,
+  `FinalDemandClearingBlock`, `HouseholdShareDemandBlock`,
+  `HouseholdShareDemandHHBlock`, `GovernmentShareDemandBlock`,
+  `InventoryDemandBlock`, `AbsorptionSalesBlock`, and
+  `ConsumerEndowmentCDBlock`.
+- Other reusable mechanisms: `MonopolyRentBlock`, `CapitalPriceCompositionBlock`,
+  `HouseholdIncomeLaborCapitalBlock`, `HouseholdTaxRevenueBlock`,
+  `HouseholdIncomeSumBlock`, `ImportPremiumIncomeBlock`, `GDPIncomeBlock`,
+  `ConsumptionObjectiveBlock`, and `InitialValuesBlock`.
