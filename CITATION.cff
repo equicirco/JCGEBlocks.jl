@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: JCGEBlocks.jl - Reusable CGE blocks for JCGE.
 message: >-
-  v0.1.2 - Adds calibrated multi-region saving, household, government, fixed-investment, and market-clearing blocks; signed inventory-change support; and structural-zero Leontief inputs.
+  v0.1.3 - Adds stable closure-condition keys for model equations and accounting checks.
 type: software
 doi: 10.5281/zenodo.18290873
 authors:

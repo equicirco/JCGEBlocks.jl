@@ -99,6 +99,7 @@ export ExternalBalanceRemitBlock
 export InitialValuesBlock
 export apply_start
 export rerun!
+export closure_condition
 export production
 export production_sector_pf
 export production_multilabor_cd
@@ -109,6 +110,20 @@ end
 
 function mcp_constraint(model::JuMP.Model, expr, var)
     return @constraint(model, expr ⟂ var)
+end
+
+"""
+    closure_condition(block, tag, indices...)
+
+Construct the stable `JCGECore.ClosureCondition` key for an equation emitted
+by `block`. It matches the key recorded by `JCGERuntime` when the block builds
+that equation.
+"""
+function closure_condition(block::JCGECore.AbstractBlock, tag::Symbol,
+    indices::Symbol...)
+    hasproperty(block, :name) ||
+        error("Closure-condition keys require a JCGE block with a `name` field.")
+    return JCGECore.ClosureCondition(getproperty(block, :name), tag, indices...)
 end
 export factor_supply
 export household_demand

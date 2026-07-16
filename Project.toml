@@ -1,7 +1,7 @@
 name = "JCGEBlocks"
 uuid = "e7e2410e-b632-4869-8943-8241db0dfb31"
 authors = ["Riccardo Boero <ribo@nilu.no>"]
-version = "0.1.2"
+version = "0.1.3"
 
 [deps]
 JCGECore = "9fb9d605-0ed3-4980-82c1-f0874844db5d"
@@ -11,7 +11,7 @@ MathOptInterface = "b8f27783-ece8-5eb3-8dc8-9495eed66fee"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
-JCGECore = "0.1.2"
+JCGECore = "0.1.3"
 JCGERuntime = "0.1"
 JuMP = "1"
 MathOptInterface = "1"

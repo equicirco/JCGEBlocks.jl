@@ -455,6 +455,27 @@ end
     @test count(eq -> eq.tag == :regional_government_demand, ctx.equations) == 2
 end
 
+@testset "JCGEBlocks closure-condition keys" begin
+    params = (positive_lower = 1.0e-8,)
+    pool = JCGEBlocks.regional_investment_pool(
+        :investment_pool,
+        [:r1],
+        Dict(:r1 => [:g_r1]);
+        params=params,
+    )
+    market = JCGEBlocks.regional_composite_market_clearing(
+        :market,
+        [:r1],
+        Dict(:r1 => [:g_r1]),
+        Dict(:r1 => [:a_r1]);
+        params=params,
+    )
+    @test JCGEBlocks.closure_condition(pool, :investment_pool_clearing) ==
+        JCGECore.ClosureCondition(:investment_pool, :investment_pool_clearing)
+    @test JCGEBlocks.closure_condition(market, :regional_composite_market, :g_r1, :r1) ==
+        JCGECore.ClosureCondition(:market, :regional_composite_market, :g_r1, :r1)
+end
+
 @testset "JCGEBlocks.GovernmentBlock" begin
     sets = JCGECore.Sets([:g1, :g2], [:a1], [:lab], [:hh1])
     mappings = JCGECore.Mappings(Dict(:a1 => :g1))

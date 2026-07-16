@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "8105c8d01259cd796b2c2983ffff13568b8646dc"
+project_hash = "3eac34a33cec8d2f12615b2db47cd6e1512847ea"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -166,13 +166,13 @@ version = "1.0.0"
 deps = ["JCGECore", "JCGERuntime", "JuMP", "MathOptInterface", "Test"]
 path = "."
 uuid = "e7e2410e-b632-4869-8943-8241db0dfb31"
-version = "0.1.1"
+version = "0.1.3"
 
 [[deps.JCGECore]]
 deps = ["Test"]
-git-tree-sha1 = "75f5d224e28b3d6027803449a34a45bdc4d220ae"
+git-tree-sha1 = "3056d2170f768f2c5c12ccc5aa48e941b76019fa"
 uuid = "9fb9d605-0ed3-4980-82c1-f0874844db5d"
-version = "0.1.2"
+version = "0.1.3"
 
 [[deps.JCGERuntime]]
 deps = ["Distributed", "DualSignals", "JCGECore", "JuMP", "Test"]

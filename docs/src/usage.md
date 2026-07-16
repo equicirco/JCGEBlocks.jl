@@ -55,6 +55,26 @@ and delivery factors are model inputs; the package provides no numerical
 defaults. A zero Armington or CET exponent is represented exactly as the
 Cobb--Douglas limit.
 
+## Closure conditions
+
+Each equation emitted by a block has a stable closure-condition key: the block
+name, equation tag, and its indices. Use `closure_condition` when declaring a
+model closure. For example, the investment-pool identity can remain in the
+equation inventory as a post-solution accounting check:
+
+```julia
+using JCGECore: ClosureSpec
+
+pool_check = closure_condition(pool, :investment_pool_clearing)
+closure = ClosureSpec(:P_HH_COMMON;
+    kind = :price_index,
+    condition_roles = Dict(pool_check => :accounting_check),
+)
+```
+
+`JCGERuntime` 0.1.4 or later applies these roles during compilation and
+evaluates accounting checks after solution.
+
 ## Functional forms
 
 Many blocks accept a `form` symbol to select a functional form (Cobb-Douglas,

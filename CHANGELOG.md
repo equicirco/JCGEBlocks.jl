@@ -10,6 +10,12 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.3] - 2026-07-16
+### Added
+- `closure_condition` helper for constructing stable closure-condition keys
+  from block equations, including multi-region market and investment-pool
+  identities.
+
 ## [0.1.2] - 2026-07-16
 ### Added
 - Regional private-saving and household-demand blocks that derive household income from factor use, allowing fixed-real-factor-price closures with unused factor capacity.
