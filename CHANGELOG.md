@@ -10,6 +10,15 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.2] - 2026-07-16
+### Added
+- Regional private-saving and household-demand blocks that derive household income from factor use, allowing fixed-real-factor-price closures with unused factor capacity.
+- Regional government-demand, fixed-investment-demand, and composite-market-clearing blocks for calibrated multi-region SAM closures.
+- Signed inventory-change support in bilateral multi-region trade, regional composite market clearing, and regional investment-pool accounting, distinct from gross fixed-capital formation.
+
+### Fixed
+- Production CD--Leontief blocks now allow structural-zero intermediate coefficients to produce exactly zero intermediate flows.
+
 ## [0.1.1] - 2026-07-16
 ### Added
 - Regional household price-index and fixed-real-factor-availability blocks for multi-region CGE closures.

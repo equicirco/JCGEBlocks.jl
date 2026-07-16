@@ -389,6 +389,72 @@ end
     @test count(eq -> eq.tag == :investment_pool_clearing, ctx.equations) == 1
 end
 
+@testset "JCGEBlocks calibrated multi-region closure blocks" begin
+    sets = JCGECore.Sets([:g_r1, :g_r2], [:a_r1, :a_r2], [:lab_r1, :lab_r2], [:hh])
+    mappings = JCGECore.Mappings(Dict(:a_r1 => :g_r1, :a_r2 => :g_r2))
+    regions = [:r1, :r2]
+    goods = Dict(:r1 => [:g_r1], :r2 => [:g_r2])
+    activities = Dict(:r1 => [:a_r1], :r2 => [:a_r2])
+    factors = Dict(:r1 => [:lab_r1], :r2 => [:lab_r2])
+    routes = [
+        JCGEBlocks.trade_route(:g_r1_r1, :g, :r1, :r1),
+        JCGEBlocks.trade_route(:g_r1_r2, :g, :r1, :r2),
+        JCGEBlocks.trade_route(:g_r2_r1, :g, :r2, :r1),
+        JCGEBlocks.trade_route(:g_r2_r2, :g, :r2, :r2),
+    ]
+    params = (
+        positive_lower = 1.0e-8,
+        ssp = Dict(:r1 => 0.1, :r2 => 0.1),
+        alpha = Dict((:g_r1, :r1) => 1.0, (:g_r2, :r2) => 1.0),
+        tau_d = Dict(:r1 => 0.0, :r2 => 0.0),
+        tau_z = Dict(:g_r1 => 0.0, :g_r2 => 0.0),
+        mu = Dict((:g_r1, :r1) => 1.0, (:g_r2, :r2) => 1.0),
+        ssg = Dict(:r1 => -0.2, :r2 => -0.2),
+        quantity = Dict(:g_r1 => 2.0, :g_r2 => 3.0),
+        inventory_quantity = Dict(:g_r1 => 0.2, :g_r2 => -0.1),
+        inventory_change = Dict((:g, :r1) => 0.2, (:g, :r2) => -0.1),
+        armington_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        armington_share = Dict(
+            :g_r1_r1 => 0.6, :g_r2_r1 => 0.4,
+            :g_r1_r2 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        armington_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        cet_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        cet_share = Dict(
+            :g_r1_r1 => 0.6, :g_r1_r2 => 0.4,
+            :g_r2_r1 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        cet_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        output_tax = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        delivery_wedge = Dict(route.id => 1.0 for route in routes),
+        world_price = Dict{Symbol,Float64}(),
+    )
+    blocks = Any[
+        JCGEBlocks.regional_private_saving_income(:saving, regions, factors, activities; params=params),
+        JCGEBlocks.regional_household_income_demand(:household, regions, goods, factors, activities; params=params),
+        JCGEBlocks.regional_government_demand(:government, regions, goods, factors, activities; params=params),
+        JCGEBlocks.regional_fixed_investment_demand(:investment_demand, regions, goods; params=params),
+        JCGEBlocks.regional_composite_market_clearing(:market, regions, goods, activities; params=params),
+        JCGEBlocks.multiregion_trade(:trade, regions, routes,
+            Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2); params=params),
+        JCGEBlocks.regional_investment_pool(:pool, regions, goods; params=params),
+    ]
+    ms = JCGECore.ModelSpec(blocks, sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:P_HH_COMMON; kind=:price_index),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    for block in blocks
+        JCGECore.build!(block, ctx, spec)
+    end
+    JCGERuntime.compile_equations!(ctx; params=params)
+    @test haskey(ctx.variables, :Sp_r1)
+    @test haskey(ctx.variables, :Xg_g_r2)
+    @test haskey(ctx.variables, :Xv_g_r1)
+    @test count(eq -> eq.tag == :regional_composite_market, ctx.equations) == 2
+    @test count(eq -> eq.tag == :regional_private_saving, ctx.equations) == 2
+    @test count(eq -> eq.tag == :regional_government_demand, ctx.equations) == 2
+end
+
 @testset "JCGEBlocks.GovernmentBlock" begin
     sets = JCGECore.Sets([:g1, :g2], [:a1], [:lab], [:hh1])
     mappings = JCGECore.Mappings(Dict(:a1 => :g1))

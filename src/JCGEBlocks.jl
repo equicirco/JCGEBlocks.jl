@@ -50,6 +50,11 @@ export PriceLevelBlock
 export PriceIndexBlock
 export RegionalPriceIndexBlock
 export RegionalFactorAvailabilityBlock
+export RegionalPrivateSavingIncomeBlock
+export RegionalHouseholdIncomeDemandBlock
+export RegionalGovernmentDemandBlock
+export RegionalFixedInvestmentDemandBlock
+export RegionalCompositeMarketClearingBlock
 export TradeRoute
 export MultiRegionTradeBlock
 export RegionalExternalAccountBlock
@@ -145,6 +150,11 @@ export price_level
 export price_index
 export regional_price_index
 export regional_factor_availability
+export regional_private_saving_income
+export regional_household_income_demand
+export regional_government_demand
+export regional_fixed_investment_demand
+export regional_composite_market_clearing
 export trade_route
 export multiregion_trade
 export regional_external_account
@@ -1897,7 +1907,10 @@ function JCGECore.build!(block::ProductionCDLeontiefBlock, ctx::JCGERuntime.Kern
     end
 
     for j in commodities, i in activities
-        X[(j, i)] = ensure_var!(ctx, model, var_name(block, :X, j, i))
+        # A Leontief coefficient may be structurally zero. Intermediate flows
+        # therefore differ from prices and activity levels: they must be able
+        # to attain zero exactly.
+        X[(j, i)] = ensure_var!(ctx, model, var_name(block, :X, j, i); lower=0.0)
     end
 
     for i in activities
@@ -2020,7 +2033,7 @@ function JCGECore.build!(block::ProductionCDLeontiefSectorPFBlock, ctx::JCGERunt
     end
 
     for j in commodities, i in activities
-        X[(j, i)] = ensure_var!(ctx, model, var_name(block, :X, j, i))
+        X[(j, i)] = ensure_var!(ctx, model, var_name(block, :X, j, i); lower=0.0)
     end
 
     for i in activities

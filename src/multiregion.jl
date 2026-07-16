@@ -208,6 +208,481 @@ function JCGECore.build!(block::RegionalFactorAvailabilityBlock,
 end
 
 """
+    regional_private_saving_income(name, regions, factors_by_region,
+        activities_by_region; factor_input=:F, factor_price=:pf,
+        saving_var=:Sp, direct_tax_var=:Td, params)
+
+Define regional private saving as a calibrated share of household factor
+income earned in the model. Unlike an endowment-based saving rule, income
+falls when a factor is not employed. Required parameter: `ssp[region]`.
+"""
+struct RegionalPrivateSavingIncomeBlock <: JCGECore.AbstractBlock
+    name::Symbol
+    regions::Vector{Symbol}
+    factors_by_region::Dict{Symbol,Vector{Symbol}}
+    activities_by_region::Dict{Symbol,Vector{Symbol}}
+    factor_input::Symbol
+    factor_price::Symbol
+    saving_var::Symbol
+    direct_tax_var::Symbol
+    params::NamedTuple
+end
+
+function regional_private_saving_income(name::Symbol,
+    regions::Vector{Symbol},
+    factors_by_region::Dict{Symbol,Vector{Symbol}},
+    activities_by_region::Dict{Symbol,Vector{Symbol}};
+    factor_input::Symbol = :F,
+    factor_price::Symbol = :pf,
+    saving_var::Symbol = :Sp,
+    direct_tax_var::Symbol = :Td,
+    params::NamedTuple)
+    return RegionalPrivateSavingIncomeBlock(
+        name,
+        copy(regions),
+        Dict(region => copy(factors_by_region[region]) for region in regions),
+        Dict(region => copy(activities_by_region[region]) for region in regions),
+        factor_input,
+        factor_price,
+        saving_var,
+        direct_tax_var,
+        params,
+    )
+end
+
+function JCGECore.build!(block::RegionalPrivateSavingIncomeBlock,
+    ctx::JCGERuntime.KernelContext,
+    spec::JCGECore.RunSpec)
+    model = ctx.model
+    for region in block.regions
+        factors = get(block.factors_by_region, region, nothing)
+        activities = get(block.activities_by_region, region, nothing)
+        factors === nothing && error("Missing factors for region $(region).")
+        activities === nothing && error("Missing activities for region $(region).")
+        ensure_var!(ctx, model, global_var(block.saving_var, region); lower=-Inf)
+        ensure_var!(ctx, model, global_var(block.direct_tax_var, region); lower=-Inf)
+        for factor in factors, activity in activities
+            ensure_var!(ctx, model, global_var(block.factor_price, factor); lower=_positive_lower(block.params))
+            ensure_var!(ctx, model, global_var(block.factor_input, factor, activity); lower=0.0)
+        end
+        expr = EEq(
+            EVar(block.saving_var, Any[region]),
+            EMul([
+                EParam(:ssp, Any[region]),
+                EAdd([
+                    ESum(:factor, factors, ESum(:activity, activities, EMul([
+                        EVar(block.factor_price, Any[EIndex(:factor)]),
+                        EVar(block.factor_input, Any[EIndex(:factor), EIndex(:activity)]),
+                    ]))),
+                    ENeg(EVar(block.direct_tax_var, Any[region])),
+                ]),
+            ]),
+        )
+        _register_multiregion_equation!(ctx, block, :regional_private_saving, region;
+            info="private saving is a calibrated share of regional disposable factor income",
+            expr=expr,
+            index_names=(:region,),
+            constraint=nothing)
+    end
+    return nothing
+end
+
+"""
+    regional_household_income_demand(name, regions, goods_by_region,
+        factors_by_region, activities_by_region; kwargs..., params)
+
+Allocate each region's disposable factor income over its household composite
+goods using calibrated expenditure shares. Required parameters are
+`alpha[(good, region)]` and `positive_lower`.
+"""
+struct RegionalHouseholdIncomeDemandBlock <: JCGECore.AbstractBlock
+    name::Symbol
+    regions::Vector{Symbol}
+    goods_by_region::Dict{Symbol,Vector{Symbol}}
+    factors_by_region::Dict{Symbol,Vector{Symbol}}
+    activities_by_region::Dict{Symbol,Vector{Symbol}}
+    factor_input::Symbol
+    factor_price::Symbol
+    composite_price::Symbol
+    consumption_var::Symbol
+    saving_var::Symbol
+    direct_tax_var::Symbol
+    params::NamedTuple
+end
+
+function regional_household_income_demand(name::Symbol,
+    regions::Vector{Symbol},
+    goods_by_region::Dict{Symbol,Vector{Symbol}},
+    factors_by_region::Dict{Symbol,Vector{Symbol}},
+    activities_by_region::Dict{Symbol,Vector{Symbol}};
+    factor_input::Symbol = :F,
+    factor_price::Symbol = :pf,
+    composite_price::Symbol = :pq,
+    consumption_var::Symbol = :Xp,
+    saving_var::Symbol = :Sp,
+    direct_tax_var::Symbol = :Td,
+    params::NamedTuple)
+    return RegionalHouseholdIncomeDemandBlock(
+        name,
+        copy(regions),
+        Dict(region => copy(goods_by_region[region]) for region in regions),
+        Dict(region => copy(factors_by_region[region]) for region in regions),
+        Dict(region => copy(activities_by_region[region]) for region in regions),
+        factor_input,
+        factor_price,
+        composite_price,
+        consumption_var,
+        saving_var,
+        direct_tax_var,
+        params,
+    )
+end
+
+function JCGECore.build!(block::RegionalHouseholdIncomeDemandBlock,
+    ctx::JCGERuntime.KernelContext,
+    spec::JCGECore.RunSpec)
+    model = ctx.model
+    lower = _positive_lower(block.params)
+    for region in block.regions
+        goods = get(block.goods_by_region, region, nothing)
+        factors = get(block.factors_by_region, region, nothing)
+        activities = get(block.activities_by_region, region, nothing)
+        goods === nothing && error("Missing goods for region $(region).")
+        factors === nothing && error("Missing factors for region $(region).")
+        activities === nothing && error("Missing activities for region $(region).")
+        ensure_var!(ctx, model, global_var(block.saving_var, region); lower=-Inf)
+        ensure_var!(ctx, model, global_var(block.direct_tax_var, region); lower=-Inf)
+        for factor in factors, activity in activities
+            ensure_var!(ctx, model, global_var(block.factor_price, factor); lower=lower)
+            ensure_var!(ctx, model, global_var(block.factor_input, factor, activity); lower=0.0)
+        end
+        for good in goods
+            ensure_var!(ctx, model, global_var(block.composite_price, good); lower=lower)
+            ensure_var!(ctx, model, global_var(block.consumption_var, good); lower=0.0)
+            expr = EEq(
+                EVar(block.consumption_var, Any[good]),
+                EDiv(
+                    EMul([
+                        EParam(:alpha, Any[good, region]),
+                        EAdd([
+                            ESum(:factor, factors, ESum(:activity, activities, EMul([
+                                EVar(block.factor_price, Any[EIndex(:factor)]),
+                                EVar(block.factor_input, Any[EIndex(:factor), EIndex(:activity)]),
+                            ]))),
+                            ENeg(EVar(block.saving_var, Any[region])),
+                            ENeg(EVar(block.direct_tax_var, Any[region])),
+                        ]),
+                    ]),
+                    EVar(block.composite_price, Any[good]),
+                ),
+            )
+            _register_multiregion_equation!(ctx, block, :regional_household_demand, good, region;
+                info="household demand allocates regional disposable factor income by calibrated expenditure shares",
+                expr=expr,
+                index_names=(:good, :region),
+                constraint=nothing)
+        end
+    end
+    return nothing
+end
+
+"""
+    regional_government_demand(name, regions, goods_by_region,
+        factors_by_region, activities_by_region; kwargs..., params)
+
+Represent one government account per modelled region. Direct and output tax
+receipts finance consumption allocated by calibrated shares and a signed
+government-saving balance. Required parameters are `tau_d[region]`,
+`tau_z[good]`, `mu[(good, region)]`, and `ssg[region]`.
+"""
+struct RegionalGovernmentDemandBlock <: JCGECore.AbstractBlock
+    name::Symbol
+    regions::Vector{Symbol}
+    goods_by_region::Dict{Symbol,Vector{Symbol}}
+    factors_by_region::Dict{Symbol,Vector{Symbol}}
+    activities_by_region::Dict{Symbol,Vector{Symbol}}
+    factor_input::Symbol
+    factor_price::Symbol
+    output_var::Symbol
+    output_price::Symbol
+    composite_price::Symbol
+    consumption_var::Symbol
+    direct_tax_var::Symbol
+    output_tax_var::Symbol
+    saving_var::Symbol
+    params::NamedTuple
+end
+
+function regional_government_demand(name::Symbol,
+    regions::Vector{Symbol},
+    goods_by_region::Dict{Symbol,Vector{Symbol}},
+    factors_by_region::Dict{Symbol,Vector{Symbol}},
+    activities_by_region::Dict{Symbol,Vector{Symbol}};
+    factor_input::Symbol = :F,
+    factor_price::Symbol = :pf,
+    output_var::Symbol = :Z,
+    output_price::Symbol = :pz,
+    composite_price::Symbol = :pq,
+    consumption_var::Symbol = :Xg,
+    direct_tax_var::Symbol = :Td,
+    output_tax_var::Symbol = :Tz,
+    saving_var::Symbol = :Sg,
+    params::NamedTuple)
+    return RegionalGovernmentDemandBlock(
+        name,
+        copy(regions),
+        Dict(region => copy(goods_by_region[region]) for region in regions),
+        Dict(region => copy(factors_by_region[region]) for region in regions),
+        Dict(region => copy(activities_by_region[region]) for region in regions),
+        factor_input,
+        factor_price,
+        output_var,
+        output_price,
+        composite_price,
+        consumption_var,
+        direct_tax_var,
+        output_tax_var,
+        saving_var,
+        params,
+    )
+end
+
+function JCGECore.build!(block::RegionalGovernmentDemandBlock,
+    ctx::JCGERuntime.KernelContext,
+    spec::JCGECore.RunSpec)
+    model = ctx.model
+    lower = _positive_lower(block.params)
+    for region in block.regions
+        goods = get(block.goods_by_region, region, nothing)
+        factors = get(block.factors_by_region, region, nothing)
+        activities = get(block.activities_by_region, region, nothing)
+        goods === nothing && error("Missing goods for region $(region).")
+        factors === nothing && error("Missing factors for region $(region).")
+        activities === nothing && error("Missing activities for region $(region).")
+        length(goods) == length(activities) ||
+            error("Government demand requires matched goods and activities in $(region).")
+        ensure_var!(ctx, model, global_var(block.direct_tax_var, region); lower=-Inf)
+        ensure_var!(ctx, model, global_var(block.saving_var, region); lower=-Inf)
+        for factor in factors, activity in activities
+            ensure_var!(ctx, model, global_var(block.factor_price, factor); lower=lower)
+            ensure_var!(ctx, model, global_var(block.factor_input, factor, activity); lower=0.0)
+        end
+        direct_tax = EEq(
+            EVar(block.direct_tax_var, Any[region]),
+            EMul([
+                EParam(:tau_d, Any[region]),
+                ESum(:factor, factors, ESum(:activity, activities, EMul([
+                    EVar(block.factor_price, Any[EIndex(:factor)]),
+                    EVar(block.factor_input, Any[EIndex(:factor), EIndex(:activity)]),
+                ]))),
+            ]),
+        )
+        _register_multiregion_equation!(ctx, block, :regional_direct_tax, region;
+            info="regional direct-tax receipts are proportional to factor income earned in the model",
+            expr=direct_tax,
+            index_names=(:region,),
+            constraint=nothing)
+
+        tax_terms = Any[EVar(block.direct_tax_var, Any[region])]
+        for (good, activity) in zip(goods, activities)
+            ensure_var!(ctx, model, global_var(block.output_var, activity); lower=lower)
+            ensure_var!(ctx, model, global_var(block.output_price, activity); lower=lower)
+            ensure_var!(ctx, model, global_var(block.output_tax_var, good); lower=-Inf)
+            output_tax = EEq(
+                EVar(block.output_tax_var, Any[good]),
+                EMul([
+                    EParam(:tau_z, Any[good]),
+                    EVar(block.output_price, Any[activity]),
+                    EVar(block.output_var, Any[activity]),
+                ]),
+            )
+            _register_multiregion_equation!(ctx, block, :regional_output_tax, good, region;
+                info="regional output-tax receipts follow the calibrated output-tax rate",
+                expr=output_tax,
+                index_names=(:good, :region),
+                constraint=nothing)
+            push!(tax_terms, EVar(block.output_tax_var, Any[good]))
+        end
+
+        saving = EEq(
+            EVar(block.saving_var, Any[region]),
+            EMul([
+                EParam(:ssg, Any[region]),
+                EAdd(tax_terms),
+            ]),
+        )
+        _register_multiregion_equation!(ctx, block, :regional_government_saving, region;
+            info="government saving is a calibrated share of regional tax revenue",
+            expr=saving,
+            index_names=(:region,),
+            constraint=nothing)
+
+        for good in goods
+            ensure_var!(ctx, model, global_var(block.composite_price, good); lower=lower)
+            ensure_var!(ctx, model, global_var(block.consumption_var, good); lower=0.0)
+            demand = EEq(
+                EVar(block.consumption_var, Any[good]),
+                EDiv(
+                    EMul([
+                        EParam(:mu, Any[good, region]),
+                        EAdd([EAdd(tax_terms), ENeg(EVar(block.saving_var, Any[region]))]),
+                    ]),
+                    EVar(block.composite_price, Any[good]),
+                ),
+            )
+            _register_multiregion_equation!(ctx, block, :regional_government_demand, good, region;
+                info="government demand allocates regional tax revenue net of government saving by calibrated shares",
+                expr=demand,
+                index_names=(:good, :region),
+                constraint=nothing)
+        end
+    end
+    return nothing
+end
+
+"""
+    regional_fixed_investment_demand(name, regions, goods_by_region;
+        quantity_var=:Xv, params)
+
+Fix gross fixed-capital-formation demand at its calibrated physical quantity.
+Required parameter: `quantity[good]`.
+"""
+struct RegionalFixedInvestmentDemandBlock <: JCGECore.AbstractBlock
+    name::Symbol
+    regions::Vector{Symbol}
+    goods_by_region::Dict{Symbol,Vector{Symbol}}
+    quantity_var::Symbol
+    params::NamedTuple
+end
+
+function regional_fixed_investment_demand(name::Symbol,
+    regions::Vector{Symbol},
+    goods_by_region::Dict{Symbol,Vector{Symbol}};
+    quantity_var::Symbol = :Xv,
+    params::NamedTuple)
+    return RegionalFixedInvestmentDemandBlock(
+        name,
+        copy(regions),
+        Dict(region => copy(goods_by_region[region]) for region in regions),
+        quantity_var,
+        params,
+    )
+end
+
+function JCGECore.build!(block::RegionalFixedInvestmentDemandBlock,
+    ctx::JCGERuntime.KernelContext,
+    spec::JCGECore.RunSpec)
+    model = ctx.model
+    for region in block.regions
+        goods = get(block.goods_by_region, region, nothing)
+        goods === nothing && error("Missing goods for region $(region).")
+        for good in goods
+            ensure_var!(ctx, model, global_var(block.quantity_var, good); lower=0.0)
+            expr = EEq(
+                EVar(block.quantity_var, Any[good]),
+                EParam(:quantity, Any[good]),
+            )
+            _register_multiregion_equation!(ctx, block, :regional_fixed_investment, good, region;
+                info="gross fixed-capital-formation demand is fixed at its calibrated quantity",
+                expr=expr,
+                index_names=(:good, :region),
+                constraint=nothing)
+        end
+    end
+    return nothing
+end
+
+"""
+    regional_composite_market_clearing(name, regions, goods_by_region,
+        activities_by_region; kwargs..., params)
+
+Clear each regional Armington composite market against intermediate,
+household, government, and fixed-investment demand. An optional signed
+`inventory_quantity[good]` parameter records inventory changes as a fixed
+market-clearing term rather than as gross fixed-capital formation.
+"""
+struct RegionalCompositeMarketClearingBlock <: JCGECore.AbstractBlock
+    name::Symbol
+    regions::Vector{Symbol}
+    goods_by_region::Dict{Symbol,Vector{Symbol}}
+    activities_by_region::Dict{Symbol,Vector{Symbol}}
+    composite_var::Symbol
+    intermediate_var::Symbol
+    household_var::Symbol
+    government_var::Symbol
+    fixed_investment_var::Symbol
+    params::NamedTuple
+end
+
+function regional_composite_market_clearing(name::Symbol,
+    regions::Vector{Symbol},
+    goods_by_region::Dict{Symbol,Vector{Symbol}},
+    activities_by_region::Dict{Symbol,Vector{Symbol}};
+    composite_var::Symbol = :Q,
+    intermediate_var::Symbol = :X,
+    household_var::Symbol = :Xp,
+    government_var::Symbol = :Xg,
+    fixed_investment_var::Symbol = :Xv,
+    params::NamedTuple)
+    return RegionalCompositeMarketClearingBlock(
+        name,
+        copy(regions),
+        Dict(region => copy(goods_by_region[region]) for region in regions),
+        Dict(region => copy(activities_by_region[region]) for region in regions),
+        composite_var,
+        intermediate_var,
+        household_var,
+        government_var,
+        fixed_investment_var,
+        params,
+    )
+end
+
+function _inventory_quantity_expr(params::NamedTuple, good::Symbol)
+    return hasproperty(params, :inventory_quantity) ?
+        EParam(:inventory_quantity, Any[good]) : EConst(0.0)
+end
+
+function JCGECore.build!(block::RegionalCompositeMarketClearingBlock,
+    ctx::JCGERuntime.KernelContext,
+    spec::JCGECore.RunSpec)
+    model = ctx.model
+    lower = _positive_lower(block.params)
+    for region in block.regions
+        goods = get(block.goods_by_region, region, nothing)
+        activities = get(block.activities_by_region, region, nothing)
+        goods === nothing && error("Missing goods for region $(region).")
+        activities === nothing && error("Missing activities for region $(region).")
+        for good in goods
+            ensure_var!(ctx, model, global_var(block.composite_var, good); lower=lower)
+            ensure_var!(ctx, model, global_var(block.household_var, good); lower=0.0)
+            ensure_var!(ctx, model, global_var(block.government_var, good); lower=0.0)
+            ensure_var!(ctx, model, global_var(block.fixed_investment_var, good); lower=0.0)
+            for activity in activities
+                ensure_var!(ctx, model, global_var(block.intermediate_var, good, activity); lower=0.0)
+            end
+            clearing = EEq(
+                EVar(block.composite_var, Any[good]),
+                EAdd([
+                    ESum(:activity, activities,
+                        EVar(block.intermediate_var, Any[good, EIndex(:activity)])),
+                    EVar(block.household_var, Any[good]),
+                    EVar(block.government_var, Any[good]),
+                    EVar(block.fixed_investment_var, Any[good]),
+                    _inventory_quantity_expr(block.params, good),
+                ]),
+            )
+            _register_multiregion_equation!(ctx, block, :regional_composite_market, good, region;
+                info="regional composite supply equals intermediate, household, government, fixed-investment, and signed inventory demand",
+                expr=clearing,
+                index_names=(:good, :region),
+                constraint=nothing)
+        end
+    end
+    return nothing
+end
+
+"""
     TradeRoute(id, product, origin, destination)
 
 One bilateral flow in a multi-region trade system. `origin` and `destination`
@@ -244,7 +719,10 @@ Required parameters are `armington_scale[product, destination]`,
 `cet_exponent[product, origin]`, `output_tax[product, origin]`,
 `delivery_wedge[route]`, `world_price[route]` for ROW routes, and
 `positive_lower`. An exponent of zero is represented exactly by its
-Cobb--Douglas limit; it is not approximated numerically.
+Cobb--Douglas limit; it is not approximated numerically. An optional signed
+`inventory_change[product, origin]` parameter separates changes in inventories
+from marketed production: the CET transformation and bilateral flows equal
+`output - inventory_change`.
 """
 struct MultiRegionTradeBlock <: JCGECore.AbstractBlock
     name::Symbol
@@ -397,6 +875,11 @@ function _trade_exponent(params::NamedTuple, name::Symbol, product::Symbol, regi
     return exponent
 end
 
+function _inventory_change_expr(params::NamedTuple, product::Symbol, origin::Symbol)
+    return hasproperty(params, :inventory_change) ?
+        EParam(:inventory_change, Any[product, origin]) : EConst(0.0)
+end
+
 function _ces_quantity_expr(scale_name::Symbol, share_name::Symbol,
     exponent_name::Symbol, quantity_var::Symbol, aggregate_var::Symbol,
     product::Symbol, region::Symbol, routes::Vector{TradeRoute})
@@ -489,6 +972,11 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
 
         ensure_var!(ctx, model, global_var(block.output_var, good); lower=lower)
         ensure_var!(ctx, model, global_var(block.output_price_var, good); lower=lower)
+        inventory_change = _inventory_change_expr(block.params, product, origin)
+        marketed_output = EAdd([
+            EVar(block.output_var, Any[good]),
+            ENeg(inventory_change),
+        ])
         if iszero(exponent)
             transform = _cd_quantity_expr(
                 :cet_scale, :cet_share, block.flow_var, block.output_var,
@@ -504,9 +992,10 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
             info = "output is a multi-destination CET transformation of bilateral sales"
             tag = :cet_quantity
         end
-        transform = EEq(EVar(block.output_var, Any[good]), transform.rhs)
+        transform = EEq(marketed_output, transform.rhs)
         _register_multiregion_equation!(ctx, block, tag, product, origin;
-            info=info,
+            info=hasproperty(block.params, :inventory_change) ?
+                "marketed output net of signed inventory change is $(info)" : info,
             expr=transform,
             index_names=(:product, :origin),
             constraint=nothing)
@@ -522,7 +1011,7 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
                             EVar(block.output_price_var, Any[good]),
                             EVar(block.seller_price_var, Any[route.id]),
                         ),
-                        EVar(block.output_var, Any[good]),
+                        marketed_output,
                     ]),
                 )
             else
@@ -545,7 +1034,7 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
                                 EAdd([EConst(1.0), ENeg(EParam(:cet_exponent, Any[product, origin]))]),
                             ),
                         ),
-                        EVar(block.output_var, Any[good]),
+                        marketed_output,
                     ]),
                 )
             end
@@ -694,7 +1183,9 @@ Close regional saving and investment through one pool shared by the modelled
 regions. `goods_by_region` identifies the composite investment goods in each
 region. The block values those quantities at their composite prices, records a
 signed pool transfer for every region, and requires those transfers to sum to
-zero.
+zero. When `params.inventory_quantity[good]` is supplied, signed inventory
+changes are included in investment spending but remain distinct from gross
+fixed-capital-formation quantities.
 
 The regional saving, government saving, and foreign-saving variables are
 model-defined inputs. This block does not prescribe their behavioural closure.
@@ -751,12 +1242,12 @@ function JCGECore.build!(block::RegionalInvestmentPoolBlock,
         goods === nothing && error("Missing investment goods for region $(region).")
         isempty(goods) && error("Regional investment pool requires at least one investment good for $(region).")
         ensure_var!(ctx, model, global_var(block.private_saving_var, region); lower=lower)
-        ensure_var!(ctx, model, global_var(block.government_saving_var, region); lower=lower)
+        ensure_var!(ctx, model, global_var(block.government_saving_var, region); lower=-Inf)
         ensure_var!(ctx, model, global_var(block.foreign_saving_var, region); lower=-Inf)
         ensure_var!(ctx, model, global_var(block.investment_spending_var, region); lower=lower)
         ensure_var!(ctx, model, global_var(block.pool_transfer_var, region); lower=-Inf)
         for good in goods
-            ensure_var!(ctx, model, global_var(block.investment_quantity_var, good); lower=lower)
+            ensure_var!(ctx, model, global_var(block.investment_quantity_var, good); lower=0.0)
             ensure_var!(ctx, model, global_var(block.composite_price_var, good); lower=lower)
         end
 
@@ -765,7 +1256,10 @@ function JCGECore.build!(block::RegionalInvestmentPoolBlock,
             EAdd([
                 EMul([
                     EVar(block.composite_price_var, Any[good]),
-                    EVar(block.investment_quantity_var, Any[good]),
+                    EAdd([
+                        EVar(block.investment_quantity_var, Any[good]),
+                        _inventory_quantity_expr(block.params, good),
+                    ]),
                 ])
                 for good in goods
             ]),

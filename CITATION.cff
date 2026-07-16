@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: JCGEBlocks.jl - Reusable CGE blocks for JCGE.
 message: >-
-  v0.1.1 - Adds reusable multi-region price-index, factor-availability, bilateral-trade, external-account, and investment-pool blocks.
+  v0.1.2 - Adds calibrated multi-region saving, household, government, fixed-investment, and market-clearing blocks; signed inventory-change support; and structural-zero Leontief inputs.
 type: software
 doi: 10.5281/zenodo.18290873
 authors:

@@ -32,6 +32,24 @@ associated signed pool transfer, and clears those transfers across the
 modelled regions. Saving and investment behaviour remain defined by the model
 that uses the block.
 
+For a calibrated multi-region SAM, `regional_private_saving_income` and
+`regional_household_income_demand` derive household saving and consumption
+from the factor income actually earned in each region. This allows fixed real
+factor prices with unused factor capacity. `regional_government_demand` uses
+calibrated direct- and output-tax rates, spending shares, and a government
+saving share; its government-saving balance may therefore be positive or
+negative. `regional_fixed_investment_demand` fixes gross fixed-capital
+formation at its calibrated quantities, while
+`regional_composite_market_clearing` clears Armington composites against
+intermediate, household, government, fixed-investment, and optional signed
+inventory demand.
+
+Signed `inventory_change[product, origin]` parameters in `multiregion_trade`
+separate production from marketed sales. The corresponding
+`inventory_quantity[good]` values can be supplied to the composite-market and
+investment-pool blocks, so changes in inventories affect market clearing and
+investment finance without being treated as fixed-capital formation.
+
 All regional mappings, trade routes, elasticities, calibrated shares, prices,
 and delivery factors are model inputs; the package provides no numerical
 defaults. A zero Armington or CET exponent is represented exactly as the
