@@ -48,6 +48,12 @@ export InvestmentAllocationBlock
 export CompositeConsumptionBlock
 export PriceLevelBlock
 export PriceIndexBlock
+export RegionalPriceIndexBlock
+export RegionalFactorAvailabilityBlock
+export TradeRoute
+export MultiRegionTradeBlock
+export RegionalExternalAccountBlock
+export RegionalInvestmentPoolBlock
 export ClosureBlock
 export UtilityBlock
 export UtilityCDBlock
@@ -137,6 +143,12 @@ export investment_allocation
 export composite_consumption
 export price_level
 export price_index
+export regional_price_index
+export regional_factor_availability
+export trade_route
+export multiregion_trade
+export regional_external_account
+export regional_investment_pool
 export closure
 export utility
 export utility_regional
@@ -480,7 +492,7 @@ price_equality(name::Symbol, commodities::Vector{Symbol}) =
 
 Fix a numeraire variable.
 
-`kind` can be `:commodity`, `:factor`, or `:exchange`. The matching price
+`kind` can be `:commodity`, `:factor`, `:exchange`, or `:price_index`. The matching price
 variable is fixed at `value`.
 """
 numeraire(name::Symbol, kind::Symbol, label::Symbol, value::Real) =
@@ -2942,19 +2954,19 @@ end
 
 function JCGECore.build!(block::NumeraireBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
     model = ctx.model
+    if block.kind == :factor
+        price = ensure_var!(ctx, model, var_name(block, :pf, block.label))
+    elseif block.kind == :commodity
+        price = ensure_var!(ctx, model, var_name(block, :pq, block.label))
+    elseif block.kind == :exchange
+        price = ensure_var!(ctx, model, var_name(block, :epsilon))
+    elseif block.kind == :price_index
+        price = ensure_var!(ctx, model, var_name(block, block.label))
+    else
+        error("Unknown numeraire kind: $(block.kind)")
+    end
     if model isa JuMP.Model
-        if block.kind == :factor
-            pf = ensure_var!(ctx, model, var_name(block, :pf, block.label))
-            JuMP.fix(pf, block.value; force=true)
-        elseif block.kind == :commodity
-            pq = ensure_var!(ctx, model, var_name(block, :pq, block.label))
-            JuMP.fix(pq, block.value; force=true)
-        elseif block.kind == :exchange
-            epsilon = ensure_var!(ctx, model, var_name(block, :epsilon))
-            JuMP.fix(epsilon, block.value; force=true)
-        else
-            error("Unknown numeraire kind: $(block.kind)")
-        end
+        JuMP.fix(price, block.value; force=true)
     end
     register_eq!(ctx, block, :numeraire; info="numeraire fixed", constraint=nothing)
     return nothing
@@ -5626,5 +5638,7 @@ function rerun!(spec::JCGECore.RunSpec; from, optimizer=nothing,
     spec2 = apply_start(spec, state.start; lower=state.lower, upper=state.upper, fixed=state.fixed)
     return JCGERuntime.run!(spec2; optimizer=optimizer, dataset_id=dataset_id, tol=tol, description=description)
 end
+
+include("multiregion.jl")
 
 end # module

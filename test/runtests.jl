@@ -1,4 +1,5 @@
 using Test
+using JuMP
 using JCGEBlocks
 using JCGECore
 using JCGERuntime
@@ -255,6 +256,137 @@ end
     ctx = JCGERuntime.KernelContext()
     JCGECore.build!(block, ctx, spec)
     @test !isempty(ctx.equations)
+end
+
+@testset "JCGEBlocks price-index numeraire" begin
+    sets = JCGECore.Sets([:g1], [:a1], [:lab], [:hh1])
+    mappings = JCGECore.Mappings(Dict(:a1 => :g1))
+    block = JCGEBlocks.NumeraireBlock(:num, :price_index, :P_HH_COMMON, 1.0)
+    ms = JCGECore.ModelSpec(Any[block], sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms,
+        JCGECore.ClosureSpec(:P_HH_COMMON; kind=:price_index),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    JCGECore.build!(block, ctx, spec)
+    @test JuMP.is_fixed(ctx.variables[:P_HH_COMMON])
+    @test JuMP.fix_value(ctx.variables[:P_HH_COMMON]) == 1.0
+end
+
+@testset "JCGEBlocks.RegionalPriceIndexBlock" begin
+    sets = JCGECore.Sets([:g1_r1, :g1_r2], [:a1_r1, :a1_r2], [:lab_r1, :lab_r2], [:hh1, :hh2])
+    mappings = JCGECore.Mappings(Dict(:a1_r1 => :g1_r1, :a1_r2 => :g1_r2))
+    params = (
+        weight = Dict((:g1_r1, :r1) => 1.0, (:g1_r2, :r2) => 1.0),
+        common_weight = Dict(:r1 => 0.5, :r2 => 0.5),
+        positive_lower = 1.0e-8,
+    )
+    block = JCGEBlocks.regional_price_index(
+        :regional_cpi,
+        [:r1, :r2],
+        Dict(:r1 => [:g1_r1], :r2 => [:g1_r2]);
+        price_var=:p,
+        index_var=:P_HH,
+        common_index_var=:P_HH_COMMON,
+        params=params,
+    )
+    ms = JCGECore.ModelSpec(Any[block], sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms,
+        JCGECore.ClosureSpec(:P_HH_COMMON; kind=:price_index),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    JCGECore.build!(block, ctx, spec)
+    JCGERuntime.compile_equations!(ctx; params=params)
+    @test haskey(ctx.variables, :P_HH_r1)
+    @test haskey(ctx.variables, :P_HH_r2)
+    @test haskey(ctx.variables, :P_HH_COMMON)
+    @test length(ctx.equations) == 3
+end
+
+@testset "JCGEBlocks.RegionalFactorAvailabilityBlock" begin
+    sets = JCGECore.Sets([:g1_r1], [:a1_r1, :a2_r1], [:lab_r1, :cap_r1], [:hh1])
+    mappings = JCGECore.Mappings(Dict(:a1_r1 => :g1_r1, :a2_r1 => :g1_r1))
+    params = (
+        endowment = Dict(:lab_r1 => 10.0, :cap_r1 => 5.0),
+        real_price = Dict(:lab_r1 => 1.0, :cap_r1 => 1.0),
+        positive_lower = 1.0e-8,
+    )
+    block = JCGEBlocks.regional_factor_availability(
+        :regional_factors,
+        [:r1],
+        Dict(:r1 => [:lab_r1, :cap_r1]),
+        Dict(:r1 => [:a1_r1, :a2_r1]);
+        params=params,
+    )
+    ms = JCGECore.ModelSpec(Any[block], sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:W),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    JCGECore.build!(block, ctx, spec)
+    JCGERuntime.compile_equations!(ctx; params=params)
+    @test haskey(ctx.variables, :F_lab_r1_a1_r1)
+    @test haskey(ctx.variables, :pf_cap_r1)
+    @test count(eq -> eq.tag == :factor_availability, ctx.equations) == 2
+    @test count(eq -> eq.tag == :fixed_real_factor_price, ctx.equations) == 2
+end
+
+@testset "JCGEBlocks.MultiRegionTradeBlock" begin
+    sets = JCGECore.Sets([:g_r1, :g_r2], [:a_r1, :a_r2], [:lab_r1, :lab_r2], [:hh])
+    mappings = JCGECore.Mappings(Dict(:a_r1 => :g_r1, :a_r2 => :g_r2))
+    routes = [
+        JCGEBlocks.trade_route(:g_r1_r1, :g, :r1, :r1),
+        JCGEBlocks.trade_route(:g_r1_r2, :g, :r1, :r2),
+        JCGEBlocks.trade_route(:g_r2_r1, :g, :r2, :r1),
+        JCGEBlocks.trade_route(:g_r2_r2, :g, :r2, :r2),
+        JCGEBlocks.trade_route(:g_row_r1, :g, :ROW, :r1),
+        JCGEBlocks.trade_route(:g_r1_row, :g, :r1, :ROW),
+    ]
+    params = (
+        armington_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        armington_share = Dict(
+            :g_r1_r1 => 0.6, :g_r2_r1 => 0.2, :g_row_r1 => 0.2,
+            :g_r1_r2 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        armington_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.5),
+        cet_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        cet_share = Dict(
+            :g_r1_r1 => 0.6, :g_r1_r2 => 0.2, :g_r1_row => 0.2,
+            :g_r2_r1 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        cet_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.3),
+        output_tax = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        delivery_wedge = Dict(route.id => 1.0 for route in routes),
+        world_price = Dict(:g_row_r1 => 1.0, :g_r1_row => 1.0),
+        positive_lower = 1.0e-8,
+    )
+    trade = JCGEBlocks.multiregion_trade(
+        :bilateral_trade,
+        [:r1, :r2],
+        routes,
+        Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2);
+        params=params,
+    )
+    external = JCGEBlocks.regional_external_account(:external, [:r1, :r2], routes)
+    pool = JCGEBlocks.regional_investment_pool(
+        :investment_pool,
+        [:r1, :r2],
+        Dict(:r1 => [:g_r1], :r2 => [:g_r2]);
+        params=params,
+    )
+    ms = JCGECore.ModelSpec(Any[trade, external, pool], sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:W),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    JCGECore.build!(trade, ctx, spec)
+    JCGECore.build!(external, ctx, spec)
+    JCGECore.build!(pool, ctx, spec)
+    JCGERuntime.compile_equations!(ctx; params=params)
+    @test haskey(ctx.variables, :T_g_r1_r2)
+    @test haskey(ctx.variables, :FSAV_r1)
+    @test count(eq -> eq.tag == :cet_cobb_douglas, ctx.equations) == 1
+    @test count(eq -> eq.tag == :armington_cobb_douglas, ctx.equations) == 1
+    @test count(eq -> eq.tag == :regional_external_balance, ctx.equations) == 2
+    @test count(eq -> eq.tag == :regional_investment_funding, ctx.equations) == 2
+    @test count(eq -> eq.tag == :investment_pool_clearing, ctx.equations) == 1
 end
 
 @testset "JCGEBlocks.GovernmentBlock" begin

@@ -10,6 +10,14 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.1] - 2026-07-16
+### Added
+- Regional household price-index and fixed-real-factor-availability blocks for multi-region CGE closures.
+- Support for fixing a model-defined price-index numeraire through `NumeraireBlock`.
+- Bilateral multi-region Armington/CET trade block with shared route quantities, exact Cobb--Douglas limits, and ROW as an external counterpart rather than a modelled region.
+- Regional external-account block that records each region's ROW trade balance.
+- Regional investment-pool block that clears model-defined regional saving and investment through explicit transfers.
+
 ## [0.1.0] - 2026-01-18
 ### Added
 - Core CGE block catalog covering production (CD, Leontief, sector PF, multilabor), trade (Armington, CET, export demand, nontraded supply), and market-clearing blocks.

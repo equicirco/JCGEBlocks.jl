@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.3"
+julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "143ed966cc97749163e37e9e249b758dd99ca61c"
+project_hash = "8105c8d01259cd796b2c2983ffff13568b8646dc"
 
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
@@ -90,6 +90,11 @@ git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
 
+[[deps.Distributed]]
+deps = ["Random", "Serialization", "Sockets"]
+uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+version = "1.11.0"
+
 [[deps.DocStringExtensions]]
 git-tree-sha1 = "7442a5dfe1ebb773c29cc2962a8980f47221d76c"
 uuid = "ffbed154-4ef7-542d-bbb7-c09d3a79fcae"
@@ -161,23 +166,19 @@ version = "1.0.0"
 deps = ["JCGECore", "JCGERuntime", "JuMP", "MathOptInterface", "Test"]
 path = "."
 uuid = "e7e2410e-b632-4869-8943-8241db0dfb31"
-version = "0.0.0"
+version = "0.1.1"
 
 [[deps.JCGECore]]
 deps = ["Test"]
-git-tree-sha1 = "b2138782379faada97e3eb393b134ad313abb601"
-repo-rev = "main"
-repo-url = "https://github.com/equicirco/JCGECore.jl"
+git-tree-sha1 = "75f5d224e28b3d6027803449a34a45bdc4d220ae"
 uuid = "9fb9d605-0ed3-4980-82c1-f0874844db5d"
-version = "0.1.0"
+version = "0.1.2"
 
 [[deps.JCGERuntime]]
-deps = ["DualSignals", "JCGECore", "JuMP", "Test"]
-git-tree-sha1 = "f109d17ed91cbfb1fc6fc2a47b3050acd5b900bf"
-repo-rev = "main"
-repo-url = "https://github.com/equicirco/JCGERuntime.jl"
+deps = ["Distributed", "DualSignals", "JCGECore", "JuMP", "Test"]
+git-tree-sha1 = "4edc1f2eb0772cccee841ae347d612c43e6c7c5d"
 uuid = "cc244198-1562-43f7-ad75-589e1d675269"
-version = "0.1.0"
+version = "0.1.3"
 
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
@@ -359,6 +360,10 @@ version = "1.4.9"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+[[deps.Sockets]]
+uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
 
 [[deps.SparseArrays]]
