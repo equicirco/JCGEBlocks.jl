@@ -373,13 +373,16 @@ end
         params=params,
     )
     ms = JCGECore.ModelSpec(Any[trade, external, pool], sets, mappings)
-    spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:W),
+    pool_check = JCGEBlocks.closure_condition(pool, :investment_pool_clearing)
+    closure = JCGECore.ClosureSpec(:W;
+        condition_roles=Dict(pool_check => :accounting_check))
+    spec = JCGECore.RunSpec("BlocksTest", ms, closure,
         JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
     ctx = JCGERuntime.KernelContext(model=JuMP.Model())
     JCGECore.build!(trade, ctx, spec)
     JCGECore.build!(external, ctx, spec)
     JCGECore.build!(pool, ctx, spec)
-    JCGERuntime.compile_equations!(ctx; params=params)
+    JCGERuntime.compile_equations!(ctx; params=params, closure=spec.closure)
     @test haskey(ctx.variables, :T_g_r1_r2)
     @test haskey(ctx.variables, :FSAV_r1)
     @test count(eq -> eq.tag == :cet_cobb_douglas, ctx.equations) == 1
@@ -387,6 +390,10 @@ end
     @test count(eq -> eq.tag == :regional_external_balance, ctx.equations) == 2
     @test count(eq -> eq.tag == :regional_investment_funding, ctx.equations) == 2
     @test count(eq -> eq.tag == :investment_pool_clearing, ctx.equations) == 1
+    pool_equation = only(filter(eq -> eq.tag == :investment_pool_clearing, ctx.equations))
+    @test pool_equation.payload.closure_condition == pool_check
+    @test pool_equation.payload.condition_role == :accounting_check
+    @test pool_equation.payload.constraint === nothing
 end
 
 @testset "JCGEBlocks calibrated multi-region closure blocks" begin

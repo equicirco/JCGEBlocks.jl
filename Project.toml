@@ -12,7 +12,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 JCGECore = "0.1.3"
-JCGERuntime = "0.1"
+JCGERuntime = "0.1.4"
 JuMP = "1"
 MathOptInterface = "1"
 julia = "1.10"
