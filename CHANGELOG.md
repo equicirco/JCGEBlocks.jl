@@ -10,6 +10,19 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.4] - 2026-07-16
+### Added
+- `InventoryTreatment` and `inventory_treatment` provide one typed inventory
+  convention shared by output-allocation, market-clearing, and
+  saving--investment blocks.
+- Both `:stock_change` and `:marketed_demand` conventions are available for
+  the single-region and multi-region block families.
+
+### Changed
+- Multi-region inventory changes now use one signed parameter keyed by model
+  good, rather than separate product-origin and commodity parameters.
+- Inventory-aware blocks validate that one model does not mix treatments.
+
 ## [0.1.3] - 2026-07-16
 ### Added
 - `closure_condition` helper for constructing stable closure-condition keys
@@ -20,7 +33,10 @@ Security: For vulnerabilities.
 ### Added
 - Regional private-saving and household-demand blocks that derive household income from factor use, allowing fixed-real-factor-price closures with unused factor capacity.
 - Regional government-demand, fixed-investment-demand, and composite-market-clearing blocks for calibrated multi-region SAM closures.
-- Signed inventory-change support in bilateral multi-region trade, regional composite market clearing, and regional investment-pool accounting, distinct from gross fixed-capital formation.
+- Initial signed-inventory support in bilateral multi-region trade, regional
+  composite market clearing, and regional investment-pool accounting,
+  distinct from gross fixed-capital formation. Replaced by the shared
+  `InventoryTreatment` interface in 0.1.4.
 
 ### Fixed
 - Production CD--Leontief blocks now allow structural-zero intermediate coefficients to produce exactly zero intermediate flows.

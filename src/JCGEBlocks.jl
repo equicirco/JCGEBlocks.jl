@@ -97,9 +97,11 @@ export FinalDemandClearingBlock
 export ConsumptionObjectiveBlock
 export ExternalBalanceRemitBlock
 export InitialValuesBlock
+export InventoryTreatment
 export apply_start
 export rerun!
 export closure_condition
+export inventory_treatment
 export production
 export production_sector_pf
 export production_multilabor_cd
@@ -124,6 +126,77 @@ function closure_condition(block::JCGECore.AbstractBlock, tag::Symbol,
     hasproperty(block, :name) ||
         error("Closure-condition keys require a JCGE block with a `name` field.")
     return JCGECore.ClosureCondition(getproperty(block, :name), tag, indices...)
+end
+
+"""
+    InventoryTreatment(mode; parameter=:inventory_change)
+
+One coherent convention for inventory changes across the blocks that allocate
+output, clear goods markets, and finance investment. `mode` is either
+`:stock_change` or `:marketed_demand`.
+
+With `:stock_change`, a positive inventory change is retained from gross
+output before sales and is financed through saving--investment; it is not an
+additional demand for the marketed composite. With `:marketed_demand`, gross
+output is marketed and the inventory change is an additional composite demand,
+while remaining part of saving--investment. For multi-region blocks,
+`parameter` names the signed parameter keyed by the model good.
+"""
+struct InventoryTreatment
+    mode::Symbol
+    parameter::Symbol
+
+    function InventoryTreatment(mode::Symbol, parameter::Symbol)
+        mode in (:stock_change, :marketed_demand) ||
+            error("Unsupported inventory treatment $(mode). Use :stock_change or :marketed_demand.")
+        return new(mode, parameter)
+    end
+end
+
+InventoryTreatment(mode::Symbol; parameter::Symbol=:inventory_change) =
+    InventoryTreatment(mode, parameter)
+
+"""
+    inventory_treatment(mode; parameter=:inventory_change)
+
+Construct an [`InventoryTreatment`](@ref). Pass the same treatment to every
+inventory-aware block in one model.
+"""
+inventory_treatment(mode::Symbol; parameter::Symbol=:inventory_change) =
+    InventoryTreatment(mode; parameter=parameter)
+
+Base.:(==)(left::InventoryTreatment, right::InventoryTreatment) =
+    left.mode == right.mode && left.parameter == right.parameter
+
+_inventory_is_stock_change(treatment::InventoryTreatment) =
+    treatment.mode == :stock_change
+
+_inventory_is_marketed_demand(treatment::InventoryTreatment) =
+    treatment.mode == :marketed_demand
+
+function _inventory_parameter_expr(treatment::InventoryTreatment,
+    params::NamedTuple, good::Symbol)
+    hasproperty(params, treatment.parameter) || error(
+        "Inventory treatment requires params.$(treatment.parameter), keyed by model good.")
+    return EParam(treatment.parameter, Any[good])
+end
+
+inventory_treatment(::JCGECore.AbstractBlock) = nothing
+
+function _validate_inventory_treatment!(block::JCGECore.AbstractBlock,
+    spec::JCGECore.RunSpec)
+    treatment = inventory_treatment(block)
+    treatment === nothing && return nothing
+    participants = [candidate for candidate in spec.model.blocks
+        if inventory_treatment(candidate) !== nothing]
+    for candidate in participants
+        inventory_treatment(candidate) == treatment || error(
+            "Inventory-aware blocks must share one InventoryTreatment; " *
+            "$(block.name) uses $(treatment.mode)/$(treatment.parameter), while " *
+            "$(candidate.name) uses $(inventory_treatment(candidate).mode)/" *
+            "$(inventory_treatment(candidate).parameter).")
+    end
+    return nothing
 end
 export factor_supply
 export household_demand
@@ -815,8 +888,10 @@ import_premium_income(name::Symbol, commodities::Vector{Symbol}, params::NamedTu
 
 Absorption and sales identities for commodities.
 """
-absorption_sales(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
-    AbsorptionSalesBlock(name, commodities, params)
+function absorption_sales(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return AbsorptionSalesBlock(name, commodities, inventory, params)
+end
 
 """
     armington_m_xxd(name, commodities; params)
@@ -831,8 +906,10 @@ armington_m_xxd(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
 
 CET block with explicit domestic/export split.
 """
-cet_xxd_e(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
-    CETXXDEBlock(name, commodities, params)
+function cet_xxd_e(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return CETXXDEBlock(name, commodities, inventory, params)
+end
 
 """
     export_demand(name, commodities; params)
@@ -847,8 +924,10 @@ export_demand(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
 
 Non-traded supply block for domestic-only goods.
 """
-nontraded_supply(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
-    NontradedSupplyBlock(name, commodities, params)
+function nontraded_supply(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return NontradedSupplyBlock(name, commodities, inventory, params)
+end
 
 """
     household_share_demand(name, commodities; params)
@@ -871,8 +950,10 @@ government_share_demand(name::Symbol, commodities::Vector{Symbol}, params::Named
 
 Inventory demand block.
 """
-inventory_demand(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
-    InventoryDemandBlock(name, commodities, params)
+function inventory_demand(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return InventoryDemandBlock(name, commodities, inventory, params)
+end
 
 """
     government_finance(name, commodities; params)
@@ -895,16 +976,20 @@ gdp_income(name::Symbol, activities::Vector{Symbol}, params::NamedTuple) =
 
 Savings-investment balance block.
 """
-savings_investment(name::Symbol, activities::Vector{Symbol}, commodities::Vector{Symbol}, params::NamedTuple) =
-    SavingsInvestmentBlock(name, activities, commodities, params)
+function savings_investment(name::Symbol, activities::Vector{Symbol}, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return SavingsInvestmentBlock(name, activities, commodities, inventory, params)
+end
 
 """
     final_demand_clearing(name, commodities; params)
 
 Final demand market clearing block.
 """
-final_demand_clearing(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple) =
-    FinalDemandClearingBlock(name, commodities, params)
+function final_demand_clearing(name::Symbol, commodities::Vector{Symbol}, params::NamedTuple;
+    inventory::InventoryTreatment=InventoryTreatment(:marketed_demand))
+    return FinalDemandClearingBlock(name, commodities, inventory, params)
+end
 
 """
     consumption_objective(name, commodities; params)
@@ -1310,6 +1395,7 @@ end
 struct AbsorptionSalesBlock <: JCGECore.AbstractBlock
     name::Symbol
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -1322,6 +1408,7 @@ end
 struct CETXXDEBlock <: JCGECore.AbstractBlock
     name::Symbol
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -1334,6 +1421,7 @@ end
 struct NontradedSupplyBlock <: JCGECore.AbstractBlock
     name::Symbol
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -1379,6 +1467,7 @@ end
 struct InventoryDemandBlock <: JCGECore.AbstractBlock
     name::Symbol
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -1404,14 +1493,23 @@ struct SavingsInvestmentBlock <: JCGECore.AbstractBlock
     name::Symbol
     activities::Vector{Symbol}
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
 struct FinalDemandClearingBlock <: JCGECore.AbstractBlock
     name::Symbol
     commodities::Vector{Symbol}
+    inventory::InventoryTreatment
     params::NamedTuple
 end
+
+inventory_treatment(block::AbsorptionSalesBlock) = block.inventory
+inventory_treatment(block::CETXXDEBlock) = block.inventory
+inventory_treatment(block::NontradedSupplyBlock) = block.inventory
+inventory_treatment(block::InventoryDemandBlock) = block.inventory
+inventory_treatment(block::SavingsInvestmentBlock) = block.inventory
+inventory_treatment(block::FinalDemandClearingBlock) = block.inventory
 
 struct ConsumptionObjectiveBlock <: JCGECore.AbstractBlock
     name::Symbol
@@ -4689,6 +4787,7 @@ function JCGECore.build!(block::TradePriceLinkBlock, ctx::JCGERuntime.KernelCont
 end
 
 function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
     traded = hasproperty(block.params, :traded) ? block.params.traded : commodities
     model = ctx.model
@@ -4702,6 +4801,16 @@ function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelCon
         xxd = ensure_var!(ctx, model, global_var(:xxd, i))
         pm = ensure_var!(ctx, model, global_var(:pm, i))
         m = ensure_var!(ctx, model, global_var(:m, i))
+        marketed_output = if _inventory_is_stock_change(block.inventory)
+            EAdd([
+                EVar(:xd, Any[EIndex(:i)]),
+                ENeg(EVar(:dst, Any[EIndex(:i)])),
+            ])
+        else
+            EVar(:xd, Any[EIndex(:i)])
+        end
+        _inventory_is_stock_change(block.inventory) &&
+            ensure_var!(ctx, model, global_var(:dst, i))
         term_m = i in traded ? pm * m : 0.0
         constraint = nothing
         term_m_expr = i in traded ? EMul([EVar(:pm, Any[EIndex(:i)]), EVar(:m, Any[EIndex(:i)])]) : EConst(0.0)
@@ -4725,7 +4834,7 @@ function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelCon
         constraint = nothing
         term_e_expr = i in traded ? EMul([EVar(:pe, Any[EIndex(:i)]), EVar(:e, Any[EIndex(:i)])]) : EConst(0.0)
         expr = EEq(
-            EMul([EVar(:px, Any[EIndex(:i)]), EVar(:xd, Any[EIndex(:i)])]),
+            EMul([EVar(:px, Any[EIndex(:i)]), marketed_output]),
             EAdd([
                 EMul([EVar(:pd, Any[EIndex(:i)]), EVar(:xxd, Any[EIndex(:i)])]),
                 term_e_expr,
@@ -4734,7 +4843,9 @@ function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelCon
         mcp_var = mcp ? EVar(:xxd, Any[EIndex(:i)]) : nothing
         JCGERuntime.register_equation!(ctx; tag=:sales, block=block.name,
             payload=(indices=(i,), params=_payload_params(block), index_names=(:i,),
-                info="px*xd = pd*xxd + pe*e", expr=expr, constraint=constraint, mcp_var=mcp_var))
+                info=_inventory_is_stock_change(block.inventory) ?
+                    "px*(xd-dst) = pd*xxd + pe*e" : "px*xd = pd*xxd + pe*e",
+                expr=expr, constraint=constraint, mcp_var=mcp_var))
     end
     return nothing
 end
@@ -4806,6 +4917,7 @@ function JCGECore.build!(block::ArmingtonMXxdBlock, ctx::JCGERuntime.KernelConte
 end
 
 function JCGECore.build!(block::CETXXDEBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
     traded = hasproperty(block.params, :traded) ? block.params.traded : commodities
     model = ctx.model
@@ -4821,10 +4933,19 @@ function JCGECore.build!(block::CETXXDEBlock, ctx::JCGERuntime.KernelContext, sp
         at_i = JCGECore.getparam(block.params, :at, i)
         gamma_i = JCGECore.getparam(block.params, :gamma, i)
         rhot_i = JCGECore.getparam(block.params, :rhot, i)
+        marketed_output = if _inventory_is_stock_change(block.inventory)
+            ensure_var!(ctx, model, global_var(:dst, i))
+            EAdd([
+                EVar(:xd, Any[EIndex(:i)]),
+                ENeg(EVar(:dst, Any[EIndex(:i)])),
+            ])
+        else
+            EVar(:xd, Any[EIndex(:i)])
+        end
 
         constraint = nothing
         expr = EEq(
-            EVar(:xd, Any[EIndex(:i)]),
+            marketed_output,
             EMul([
                 EParam(:at, Any[EIndex(:i)]),
                 EPow(
@@ -4845,7 +4966,10 @@ function JCGECore.build!(block::CETXXDEBlock, ctx::JCGERuntime.KernelContext, sp
         mcp_var = mcp ? EVar(:px, Any[EIndex(:i)]) : nothing
         JCGERuntime.register_equation!(ctx; tag=:cet, block=block.name,
             payload=(indices=(i,), params=_payload_params(block), index_names=(:i,),
-                info="xd = at*(gamma*e^rhot + (1-gamma)*xxd^rhot)^(1/rhot)", expr=expr, constraint=constraint, mcp_var=mcp_var))
+                info=_inventory_is_stock_change(block.inventory) ?
+                    "xd-dst = at*(gamma*e^rhot + (1-gamma)*xxd^rhot)^(1/rhot)" :
+                    "xd = at*(gamma*e^rhot + (1-gamma)*xxd^rhot)^(1/rhot)",
+                expr=expr, constraint=constraint, mcp_var=mcp_var))
 
         constraint = nothing
         expr = EEq(
@@ -4901,6 +5025,7 @@ function JCGECore.build!(block::ExportDemandBlock, ctx::JCGERuntime.KernelContex
 end
 
 function JCGECore.build!(block::NontradedSupplyBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     nontraded = hasproperty(block.params, :nontraded) ? block.params.nontraded : Symbol[]
     model = ctx.model
     mcp = mcp_enabled(block.params)
@@ -4911,15 +5036,26 @@ function JCGECore.build!(block::NontradedSupplyBlock, ctx::JCGERuntime.KernelCon
         pd = ensure_var!(ctx, model, global_var(:pd, i))
         p = ensure_var!(ctx, model, global_var(:p, i))
         px = ensure_var!(ctx, model, global_var(:px, i))
+        marketed_output = if _inventory_is_stock_change(block.inventory)
+            ensure_var!(ctx, model, global_var(:dst, i))
+            EAdd([
+                EVar(:xd, Any[EIndex(:i)]),
+                ENeg(EVar(:dst, Any[EIndex(:i)])),
+            ])
+        else
+            EVar(:xd, Any[EIndex(:i)])
+        end
         constraint = nothing
         expr = EEq(
             EVar(:xxd, Any[EIndex(:i)]),
-            EVar(:xd, Any[EIndex(:i)]),
+            marketed_output,
         )
         mcp_var = mcp ? EVar(:pd, Any[EIndex(:i)]) : nothing
         JCGERuntime.register_equation!(ctx; tag=:xxdsn, block=block.name,
             payload=(indices=(i,), params=_payload_params(block), index_names=(:i,),
-                info="xxd = xd (nontraded)", expr=expr, constraint=constraint, mcp_var=mcp_var))
+                info=_inventory_is_stock_change(block.inventory) ?
+                    "xxd = xd-dst (nontraded)" : "xxd = xd (nontraded)",
+                expr=expr, constraint=constraint, mcp_var=mcp_var))
         constraint = nothing
         expr = EEq(
             EVar(:x, Any[EIndex(:i)]),
@@ -5142,6 +5278,7 @@ function JCGECore.build!(block::GovernmentShareDemandBlock, ctx::JCGERuntime.Ker
 end
 
 function JCGECore.build!(block::InventoryDemandBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
     model = ctx.model
     mcp = mcp_enabled(block.params)
@@ -5434,6 +5571,7 @@ function JCGECore.build!(block::GDPIncomeBlock, ctx::JCGERuntime.KernelContext, 
 end
 
 function JCGECore.build!(block::SavingsInvestmentBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     activities = isempty(block.activities) ? spec.model.sets.activities : block.activities
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
     model = ctx.model
@@ -5526,6 +5664,7 @@ function JCGECore.build!(block::SavingsInvestmentBlock, ctx::JCGERuntime.KernelC
 end
 
 function JCGECore.build!(block::FinalDemandClearingBlock, ctx::JCGERuntime.KernelContext, spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
     model = ctx.model
     mcp = mcp_enabled(block.params)
@@ -5535,7 +5674,10 @@ function JCGECore.build!(block::FinalDemandClearingBlock, ctx::JCGERuntime.Kerne
         cd = ensure_var!(ctx, model, global_var(:cd, i))
         gd = ensure_var!(ctx, model, global_var(:gd, i))
         id = ensure_var!(ctx, model, global_var(:id, i))
-        dst = ensure_var!(ctx, model, global_var(:dst, i))
+        inventory_demand = _inventory_is_marketed_demand(block.inventory) ?
+            EVar(:dst, Any[EIndex(:i)]) : EConst(0.0)
+        _inventory_is_marketed_demand(block.inventory) &&
+            ensure_var!(ctx, model, global_var(:dst, i))
         constraint = nothing
         expr = EEq(
             EVar(:x, Any[EIndex(:i)]),
@@ -5544,13 +5686,15 @@ function JCGECore.build!(block::FinalDemandClearingBlock, ctx::JCGERuntime.Kerne
                 EVar(:cd, Any[EIndex(:i)]),
                 EVar(:gd, Any[EIndex(:i)]),
                 EVar(:id, Any[EIndex(:i)]),
-                EVar(:dst, Any[EIndex(:i)]),
+                inventory_demand,
             ]),
         )
         mcp_var = mcp ? EVar(:x, Any[EIndex(:i)]) : nothing
         JCGERuntime.register_equation!(ctx; tag=:equil, block=block.name,
             payload=(indices=(i,), params=_payload_params(block), index_names=(:i,),
-                info="x = int + cd + gd + id + dst", expr=expr, constraint=constraint, mcp_var=mcp_var))
+                info=_inventory_is_marketed_demand(block.inventory) ?
+                    "x = int + cd + gd + id + dst" : "x = int + cd + gd + id (inventory retained from output)",
+                expr=expr, constraint=constraint, mcp_var=mcp_var))
     end
     return nothing
 end

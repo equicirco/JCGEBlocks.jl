@@ -96,6 +96,12 @@ util = utility_regional(:utility, goods_by_region, (alpha=alpha,))
 world = international_market(:world, goods, regions, mapping)
 ```
 
+Inventory accounting is selected once with
+`inventory_treatment(:stock_change)` or
+`inventory_treatment(:marketed_demand)` and passed to the inventory-aware
+trade, market-clearing, and saving--investment blocks. See the usage guide for
+the accounting implications of each treatment.
+
 ## Block catalog
 
 - Production and activity: `ProductionBlock`, `ProductionCDBlock`,
@@ -134,7 +140,7 @@ world = international_market(:world, goods, regions, mapping)
   `CompositeMarketClearingBlock`, `RegionalCompositeMarketClearingBlock`,
   `FinalDemandClearingBlock`, `HouseholdShareDemandBlock`,
   `HouseholdShareDemandHHBlock`, `GovernmentShareDemandBlock`,
-  `InventoryDemandBlock`, `AbsorptionSalesBlock`, and
+  `InventoryDemandBlock`, `InventoryTreatment`, `AbsorptionSalesBlock`, and
   `ConsumerEndowmentCDBlock`.
 - Other reusable mechanisms: `MonopolyRentBlock`, `CapitalPriceCompositionBlock`,
   `HouseholdIncomeLaborCapitalBlock`, `HouseholdTaxRevenueBlock`,

@@ -597,9 +597,10 @@ end
         activities_by_region; kwargs..., params)
 
 Clear each regional Armington composite market against intermediate,
-household, government, and fixed-investment demand. An optional signed
-`inventory_quantity[good]` parameter records inventory changes as a fixed
-market-clearing term rather than as gross fixed-capital formation.
+household, government, and fixed-investment demand. The shared
+`InventoryTreatment` determines whether a signed inventory change is an
+additional composite demand (`:marketed_demand`) or is retained from gross
+output before marketing (`:stock_change`).
 """
 struct RegionalCompositeMarketClearingBlock <: JCGECore.AbstractBlock
     name::Symbol
@@ -611,6 +612,7 @@ struct RegionalCompositeMarketClearingBlock <: JCGECore.AbstractBlock
     household_var::Symbol
     government_var::Symbol
     fixed_investment_var::Symbol
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -623,6 +625,7 @@ function regional_composite_market_clearing(name::Symbol,
     household_var::Symbol = :Xp,
     government_var::Symbol = :Xg,
     fixed_investment_var::Symbol = :Xv,
+    inventory::InventoryTreatment = InventoryTreatment(:marketed_demand),
     params::NamedTuple)
     return RegionalCompositeMarketClearingBlock(
         name,
@@ -634,18 +637,17 @@ function regional_composite_market_clearing(name::Symbol,
         household_var,
         government_var,
         fixed_investment_var,
+        inventory,
         params,
     )
 end
 
-function _inventory_quantity_expr(params::NamedTuple, good::Symbol)
-    return hasproperty(params, :inventory_quantity) ?
-        EParam(:inventory_quantity, Any[good]) : EConst(0.0)
-end
+inventory_treatment(block::RegionalCompositeMarketClearingBlock) = block.inventory
 
 function JCGECore.build!(block::RegionalCompositeMarketClearingBlock,
     ctx::JCGERuntime.KernelContext,
     spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     model = ctx.model
     lower = _positive_lower(block.params)
     for region in block.regions
@@ -661,6 +663,8 @@ function JCGECore.build!(block::RegionalCompositeMarketClearingBlock,
             for activity in activities
                 ensure_var!(ctx, model, global_var(block.intermediate_var, good, activity); lower=0.0)
             end
+            inventory_demand = _inventory_is_marketed_demand(block.inventory) ?
+                _inventory_parameter_expr(block.inventory, block.params, good) : EConst(0.0)
             clearing = EEq(
                 EVar(block.composite_var, Any[good]),
                 EAdd([
@@ -669,11 +673,13 @@ function JCGECore.build!(block::RegionalCompositeMarketClearingBlock,
                     EVar(block.household_var, Any[good]),
                     EVar(block.government_var, Any[good]),
                     EVar(block.fixed_investment_var, Any[good]),
-                    _inventory_quantity_expr(block.params, good),
+                    inventory_demand,
                 ]),
             )
             _register_multiregion_equation!(ctx, block, :regional_composite_market, good, region;
-                info="regional composite supply equals intermediate, household, government, fixed-investment, and signed inventory demand",
+                info=_inventory_is_marketed_demand(block.inventory) ?
+                    "regional composite supply equals intermediate, household, government, fixed-investment, and signed inventory demand" :
+                    "regional composite supply equals intermediate, household, government, and fixed-investment demand; inventory change is retained from output",
                 expr=clearing,
                 index_names=(:good, :region),
                 constraint=nothing)
@@ -719,10 +725,10 @@ Required parameters are `armington_scale[product, destination]`,
 `cet_exponent[product, origin]`, `output_tax[product, origin]`,
 `delivery_wedge[route]`, `world_price[route]` for ROW routes, and
 `positive_lower`. An exponent of zero is represented exactly by its
-Cobb--Douglas limit; it is not approximated numerically. An optional signed
-`inventory_change[product, origin]` parameter separates changes in inventories
-from marketed production: the CET transformation and bilateral flows equal
-`output - inventory_change`.
+Cobb--Douglas limit; it is not approximated numerically. With the shared
+`:stock_change` inventory treatment, the signed inventory parameter keyed by
+the origin's model good is retained from gross output, so the CET
+transformation and bilateral flows equal `output - inventory_change`.
 """
 struct MultiRegionTradeBlock <: JCGECore.AbstractBlock
     name::Symbol
@@ -736,6 +742,7 @@ struct MultiRegionTradeBlock <: JCGECore.AbstractBlock
     flow_var::Symbol
     seller_price_var::Symbol
     delivered_price_var::Symbol
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -750,6 +757,7 @@ function multiregion_trade(name::Symbol,
     flow_var::Symbol = :T,
     seller_price_var::Symbol = :pS,
     delivered_price_var::Symbol = :pD,
+    inventory::InventoryTreatment = InventoryTreatment(:marketed_demand),
     params::NamedTuple)
     return MultiRegionTradeBlock(
         name,
@@ -763,9 +771,12 @@ function multiregion_trade(name::Symbol,
         flow_var,
         seller_price_var,
         delivered_price_var,
+        inventory,
         params,
     )
 end
+
+inventory_treatment(block::MultiRegionTradeBlock) = block.inventory
 
 """
     regional_external_account(name, regions, routes; flow_var=:T,
@@ -875,11 +886,6 @@ function _trade_exponent(params::NamedTuple, name::Symbol, product::Symbol, regi
     return exponent
 end
 
-function _inventory_change_expr(params::NamedTuple, product::Symbol, origin::Symbol)
-    return hasproperty(params, :inventory_change) ?
-        EParam(:inventory_change, Any[product, origin]) : EConst(0.0)
-end
-
 function _ces_quantity_expr(scale_name::Symbol, share_name::Symbol,
     exponent_name::Symbol, quantity_var::Symbol, aggregate_var::Symbol,
     product::Symbol, region::Symbol, routes::Vector{TradeRoute})
@@ -922,6 +928,7 @@ end
 function JCGECore.build!(block::MultiRegionTradeBlock,
     ctx::JCGERuntime.KernelContext,
     spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     model = ctx.model
     lower = _positive_lower(block.params)
     supply, demand = _trade_groups(block)
@@ -972,7 +979,8 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
 
         ensure_var!(ctx, model, global_var(block.output_var, good); lower=lower)
         ensure_var!(ctx, model, global_var(block.output_price_var, good); lower=lower)
-        inventory_change = _inventory_change_expr(block.params, product, origin)
+        inventory_change = _inventory_is_stock_change(block.inventory) ?
+            _inventory_parameter_expr(block.inventory, block.params, good) : EConst(0.0)
         marketed_output = EAdd([
             EVar(block.output_var, Any[good]),
             ENeg(inventory_change),
@@ -994,7 +1002,7 @@ function JCGECore.build!(block::MultiRegionTradeBlock,
         end
         transform = EEq(marketed_output, transform.rhs)
         _register_multiregion_equation!(ctx, block, tag, product, origin;
-            info=hasproperty(block.params, :inventory_change) ?
+            info=_inventory_is_stock_change(block.inventory) ?
                 "marketed output net of signed inventory change is $(info)" : info,
             expr=transform,
             index_names=(:product, :origin),
@@ -1183,8 +1191,8 @@ Close regional saving and investment through one pool shared by the modelled
 regions. `goods_by_region` identifies the composite investment goods in each
 region. The block values those quantities at their composite prices, records a
 signed pool transfer for every region, and requires those transfers to sum to
-zero. When `params.inventory_quantity[good]` is supplied, signed inventory
-changes are included in investment spending but remain distinct from gross
+zero. Under either shared inventory treatment, signed inventory changes are
+included in investment spending but remain distinct from gross
 fixed-capital-formation quantities.
 
 The regional saving, government saving, and foreign-saving variables are
@@ -1202,6 +1210,7 @@ struct RegionalInvestmentPoolBlock <: JCGECore.AbstractBlock
     composite_price_var::Symbol
     investment_spending_var::Symbol
     pool_transfer_var::Symbol
+    inventory::InventoryTreatment
     params::NamedTuple
 end
 
@@ -1215,6 +1224,7 @@ function regional_investment_pool(name::Symbol,
     composite_price_var::Symbol = :pq,
     investment_spending_var::Symbol = :INV,
     pool_transfer_var::Symbol = :INV_POOL,
+    inventory::InventoryTreatment = InventoryTreatment(:marketed_demand),
     params::NamedTuple)
     return RegionalInvestmentPoolBlock(
         name,
@@ -1227,13 +1237,17 @@ function regional_investment_pool(name::Symbol,
         composite_price_var,
         investment_spending_var,
         pool_transfer_var,
+        inventory,
         params,
     )
 end
 
+inventory_treatment(block::RegionalInvestmentPoolBlock) = block.inventory
+
 function JCGECore.build!(block::RegionalInvestmentPoolBlock,
     ctx::JCGERuntime.KernelContext,
     spec::JCGECore.RunSpec)
+    _validate_inventory_treatment!(block, spec)
     model = ctx.model
     lower = _positive_lower(block.params)
 
@@ -1258,7 +1272,7 @@ function JCGECore.build!(block::RegionalInvestmentPoolBlock,
                     EVar(block.composite_price_var, Any[good]),
                     EAdd([
                         EVar(block.investment_quantity_var, Any[good]),
-                        _inventory_quantity_expr(block.params, good),
+                        _inventory_parameter_expr(block.inventory, block.params, good),
                     ]),
                 ])
                 for good in goods

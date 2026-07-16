@@ -41,14 +41,49 @@ saving share; its government-saving balance may therefore be positive or
 negative. `regional_fixed_investment_demand` fixes gross fixed-capital
 formation at its calibrated quantities, while
 `regional_composite_market_clearing` clears Armington composites against
-intermediate, household, government, fixed-investment, and optional signed
-inventory demand.
+intermediate, household, government, and fixed-investment demand.
 
-Signed `inventory_change[product, origin]` parameters in `multiregion_trade`
-separate production from marketed sales. The corresponding
-`inventory_quantity[good]` values can be supplied to the composite-market and
-investment-pool blocks, so changes in inventories affect market clearing and
-investment finance without being treated as fixed-capital formation.
+## Inventory treatments
+
+`inventory_treatment` sets one accounting convention for every block that
+allocates output, clears goods markets, or finances investment. Pass the same
+object to every inventory-aware block in a model; incompatible treatments are
+rejected while the model is built.
+
+```julia
+inventory = inventory_treatment(:stock_change)
+```
+
+With `:stock_change`, a positive inventory change is retained from gross
+output before domestic or export sales. It is excluded from final or composite
+market demand, but its value is included in saving--investment accounting.
+
+With `:marketed_demand`, gross output is allocated to sales and the inventory
+change is an additional final or composite demand. Its value still enters
+saving--investment accounting. This remains the compatibility default for the
+original single-region blocks, but declaring a treatment explicitly is
+recommended.
+
+For multi-region blocks, the signed calibration input is one parameter keyed
+by model good, `inventory_change[good]` by default. A different parameter name
+can be declared through `inventory_treatment(mode; parameter=:your_parameter)`.
+In either treatment, `regional_investment_pool` keeps inventory changes
+distinct from gross fixed-capital formation.
+
+```julia
+inventory = inventory_treatment(:stock_change; parameter=:inventory_change)
+
+trade = multiregion_trade(:trade, regions, routes, goods;
+    inventory=inventory, params=params)
+market = regional_composite_market_clearing(:market, regions, goods_by_region,
+    activities_by_region; inventory=inventory, params=params)
+pool = regional_investment_pool(:pool, regions, goods_by_region;
+    inventory=inventory, params=params)
+```
+
+The same treatment can be supplied to the single-region `absorption_sales`,
+`cet_xxd_e`, `nontraded_supply`, `inventory_demand`,
+`savings_investment`, and `final_demand_clearing` blocks.
 
 All regional mappings, trade routes, elasticities, calibrated shares, prices,
 and delivery factors are model inputs; the package provides no numerical

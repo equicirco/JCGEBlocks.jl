@@ -4,6 +4,21 @@ using JCGEBlocks
 using JCGECore
 using JCGERuntime
 
+function contains_expression_reference(expr, reference_type, name::Symbol)
+    expr isa reference_type && return getfield(expr, :name) == name
+    expr isa JCGECore.EquationExpr || return false
+    for field in fieldnames(typeof(expr))
+        value = getfield(expr, field)
+        if value isa JCGECore.EquationExpr
+            contains_expression_reference(value, reference_type, name) && return true
+        elseif value isa AbstractVector
+            any(item -> item isa JCGECore.EquationExpr &&
+                contains_expression_reference(item, reference_type, name), value) && return true
+        end
+    end
+    return false
+end
+
 @testset "JCGEBlocks" begin
     sets = JCGECore.Sets([:g1, :g2], [:a1, :a2], [:lab], [:hh])
     mappings = JCGECore.Mappings(Dict(:a1 => :g1, :a2 => :g2))
@@ -356,6 +371,7 @@ end
         output_tax = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
         delivery_wedge = Dict(route.id => 1.0 for route in routes),
         world_price = Dict(:g_row_r1 => 1.0, :g_r1_row => 1.0),
+        inventory_change = Dict(:g_r1 => 0.0, :g_r2 => 0.0),
         positive_lower = 1.0e-8,
     )
     trade = JCGEBlocks.multiregion_trade(
@@ -418,8 +434,7 @@ end
         mu = Dict((:g_r1, :r1) => 1.0, (:g_r2, :r2) => 1.0),
         ssg = Dict(:r1 => -0.2, :r2 => -0.2),
         quantity = Dict(:g_r1 => 2.0, :g_r2 => 3.0),
-        inventory_quantity = Dict(:g_r1 => 0.2, :g_r2 => -0.1),
-        inventory_change = Dict((:g, :r1) => 0.2, (:g, :r2) => -0.1),
+        inventory_change = Dict(:g_r1 => 0.2, :g_r2 => -0.1),
         armington_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
         armington_share = Dict(
             :g_r1_r1 => 0.6, :g_r2_r1 => 0.4,
@@ -436,15 +451,19 @@ end
         delivery_wedge = Dict(route.id => 1.0 for route in routes),
         world_price = Dict{Symbol,Float64}(),
     )
+    inventory = JCGEBlocks.inventory_treatment(:stock_change)
     blocks = Any[
         JCGEBlocks.regional_private_saving_income(:saving, regions, factors, activities; params=params),
         JCGEBlocks.regional_household_income_demand(:household, regions, goods, factors, activities; params=params),
         JCGEBlocks.regional_government_demand(:government, regions, goods, factors, activities; params=params),
         JCGEBlocks.regional_fixed_investment_demand(:investment_demand, regions, goods; params=params),
-        JCGEBlocks.regional_composite_market_clearing(:market, regions, goods, activities; params=params),
+        JCGEBlocks.regional_composite_market_clearing(:market, regions, goods, activities;
+            inventory=inventory, params=params),
         JCGEBlocks.multiregion_trade(:trade, regions, routes,
-            Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2); params=params),
-        JCGEBlocks.regional_investment_pool(:pool, regions, goods; params=params),
+            Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2);
+            inventory=inventory, params=params),
+        JCGEBlocks.regional_investment_pool(:pool, regions, goods;
+            inventory=inventory, params=params),
     ]
     ms = JCGECore.ModelSpec(blocks, sets, mappings)
     spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:P_HH_COMMON; kind=:price_index),
@@ -460,6 +479,153 @@ end
     @test count(eq -> eq.tag == :regional_composite_market, ctx.equations) == 2
     @test count(eq -> eq.tag == :regional_private_saving, ctx.equations) == 2
     @test count(eq -> eq.tag == :regional_government_demand, ctx.equations) == 2
+end
+
+@testset "JCGEBlocks inventory treatments" begin
+    sets = JCGECore.Sets([:g_r1, :g_r2], [:a_r1, :a_r2], [:lab_r1, :lab_r2], [:hh])
+    mappings = JCGECore.Mappings(Dict(:a_r1 => :g_r1, :a_r2 => :g_r2))
+    regions = [:r1, :r2]
+    goods = Dict(:r1 => [:g_r1], :r2 => [:g_r2])
+    activities = Dict(:r1 => [:a_r1], :r2 => [:a_r2])
+    routes = [
+        JCGEBlocks.trade_route(:g_r1_r1, :g, :r1, :r1),
+        JCGEBlocks.trade_route(:g_r1_r2, :g, :r1, :r2),
+        JCGEBlocks.trade_route(:g_r2_r1, :g, :r2, :r1),
+        JCGEBlocks.trade_route(:g_r2_r2, :g, :r2, :r2),
+    ]
+    params = (
+        positive_lower = 1.0e-8,
+        inventory_change = Dict(:g_r1 => 0.2, :g_r2 => -0.1),
+        armington_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        armington_share = Dict(
+            :g_r1_r1 => 0.6, :g_r2_r1 => 0.4,
+            :g_r1_r2 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        armington_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        cet_scale = Dict((:g, :r1) => 1.0, (:g, :r2) => 1.0),
+        cet_share = Dict(
+            :g_r1_r1 => 0.6, :g_r1_r2 => 0.4,
+            :g_r2_r1 => 0.3, :g_r2_r2 => 0.7,
+        ),
+        cet_exponent = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        output_tax = Dict((:g, :r1) => 0.0, (:g, :r2) => 0.0),
+        delivery_wedge = Dict(route.id => 1.0 for route in routes),
+        world_price = Dict{Symbol,Float64}(),
+    )
+
+    function multiregion_inventory_context(treatment)
+        market = JCGEBlocks.regional_composite_market_clearing(
+            :market, regions, goods, activities; inventory=treatment, params=params)
+        trade = JCGEBlocks.multiregion_trade(
+            :trade, regions, routes,
+            Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2);
+            inventory=treatment, params=params)
+        pool = JCGEBlocks.regional_investment_pool(
+            :pool, regions, goods; inventory=treatment, params=params)
+        spec = JCGECore.RunSpec(
+            "BlocksTest",
+            JCGECore.ModelSpec(Any[market, trade, pool], sets, mappings),
+            JCGECore.ClosureSpec(:W),
+            JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()),
+        )
+        ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+        for block in spec.model.blocks
+            JCGECore.build!(block, ctx, spec)
+        end
+        JCGERuntime.compile_equations!(ctx; params=params)
+        return ctx
+    end
+
+    stock = multiregion_inventory_context(JCGEBlocks.inventory_treatment(:stock_change))
+    stock_market = first(filter(eq -> eq.tag == :regional_composite_market, stock.equations))
+    stock_trade = first(filter(eq -> eq.tag == :cet_cobb_douglas, stock.equations))
+    stock_pool = first(filter(eq -> eq.tag == :regional_investment_spending, stock.equations))
+    @test !contains_expression_reference(stock_market.payload.expr, JCGECore.EParam, :inventory_change)
+    @test contains_expression_reference(stock_trade.payload.expr, JCGECore.EParam, :inventory_change)
+    @test contains_expression_reference(stock_pool.payload.expr, JCGECore.EParam, :inventory_change)
+
+    marketed = multiregion_inventory_context(JCGEBlocks.inventory_treatment(:marketed_demand))
+    marketed_market = first(filter(eq -> eq.tag == :regional_composite_market, marketed.equations))
+    marketed_trade = first(filter(eq -> eq.tag == :cet_cobb_douglas, marketed.equations))
+    marketed_pool = first(filter(eq -> eq.tag == :regional_investment_spending, marketed.equations))
+    @test contains_expression_reference(marketed_market.payload.expr, JCGECore.EParam, :inventory_change)
+    @test !contains_expression_reference(marketed_trade.payload.expr, JCGECore.EParam, :inventory_change)
+    @test contains_expression_reference(marketed_pool.payload.expr, JCGECore.EParam, :inventory_change)
+
+    stock_treatment = JCGEBlocks.inventory_treatment(:stock_change)
+    market = JCGEBlocks.regional_composite_market_clearing(
+        :market, regions, goods, activities; inventory=stock_treatment, params=params)
+    trade = JCGEBlocks.multiregion_trade(
+        :trade, regions, routes,
+        Dict((:g, :r1) => :g_r1, (:g, :r2) => :g_r2);
+        inventory=JCGEBlocks.inventory_treatment(:marketed_demand), params=params)
+    pool = JCGEBlocks.regional_investment_pool(
+        :pool, regions, goods; inventory=stock_treatment, params=params)
+    inconsistent = JCGECore.RunSpec(
+        "BlocksTest",
+        JCGECore.ModelSpec(Any[market, trade, pool], sets, mappings),
+        JCGECore.ClosureSpec(:W),
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()),
+    )
+    @test_throws ErrorException JCGECore.build!(market, JCGERuntime.KernelContext(), inconsistent)
+end
+
+@testset "JCGEBlocks single-region inventory treatments" begin
+    sets = JCGECore.Sets([:g], [:a], [:lab], [:hh])
+    mappings = JCGECore.Mappings(Dict(:a => :g))
+    params = (
+        traded = [:g],
+        nontraded = [:g],
+        dstr = Dict(:g => 0.1),
+        at = Dict(:g => 1.0),
+        gamma = Dict(:g => 0.5),
+        rhot = Dict(:g => 0.0),
+        depr = Dict(:a => 0.1),
+        kio = Dict(:a => 1.0),
+        imat = Dict((:a, :a) => 1.0),
+    )
+
+    function single_region_inventory_context(treatment)
+        blocks = Any[
+            JCGEBlocks.absorption_sales(:sales, [:g], params; inventory=treatment),
+            JCGEBlocks.cet_xxd_e(:cet, [:g], params; inventory=treatment),
+            JCGEBlocks.nontraded_supply(:nontraded, [:g], params; inventory=treatment),
+            JCGEBlocks.inventory_demand(:inventory_demand, [:g], params; inventory=treatment),
+            JCGEBlocks.savings_investment(:saving_investment, [:a], [:g], params; inventory=treatment),
+            JCGEBlocks.final_demand_clearing(:market, [:g], params; inventory=treatment),
+        ]
+        spec = JCGECore.RunSpec(
+            "BlocksTest",
+            JCGECore.ModelSpec(blocks, sets, mappings),
+            JCGECore.ClosureSpec(:W),
+            JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()),
+        )
+        ctx = JCGERuntime.KernelContext()
+        for block in blocks
+            JCGECore.build!(block, ctx, spec)
+        end
+        return ctx
+    end
+
+    stock = single_region_inventory_context(JCGEBlocks.inventory_treatment(:stock_change))
+    stock_sales = only(filter(eq -> eq.tag == :sales, stock.equations))
+    stock_cet = only(filter(eq -> eq.tag == :cet, stock.equations))
+    stock_nontraded = only(filter(eq -> eq.tag == :xxdsn, stock.equations))
+    stock_market = only(filter(eq -> eq.tag == :equil, stock.equations))
+    @test contains_expression_reference(stock_sales.payload.expr, JCGECore.EVar, :dst)
+    @test contains_expression_reference(stock_cet.payload.expr, JCGECore.EVar, :dst)
+    @test contains_expression_reference(stock_nontraded.payload.expr, JCGECore.EVar, :dst)
+    @test !contains_expression_reference(stock_market.payload.expr, JCGECore.EVar, :dst)
+
+    marketed = single_region_inventory_context(JCGEBlocks.inventory_treatment(:marketed_demand))
+    marketed_sales = only(filter(eq -> eq.tag == :sales, marketed.equations))
+    marketed_cet = only(filter(eq -> eq.tag == :cet, marketed.equations))
+    marketed_nontraded = only(filter(eq -> eq.tag == :xxdsn, marketed.equations))
+    marketed_market = only(filter(eq -> eq.tag == :equil, marketed.equations))
+    @test !contains_expression_reference(marketed_sales.payload.expr, JCGECore.EVar, :dst)
+    @test !contains_expression_reference(marketed_cet.payload.expr, JCGECore.EVar, :dst)
+    @test !contains_expression_reference(marketed_nontraded.payload.expr, JCGECore.EVar, :dst)
+    @test contains_expression_reference(marketed_market.payload.expr, JCGECore.EVar, :dst)
 end
 
 @testset "JCGEBlocks closure-condition keys" begin
