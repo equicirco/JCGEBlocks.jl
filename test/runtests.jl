@@ -962,3 +962,68 @@ end
     @test !isempty(ctx.variables)
     @test !isempty(ctx.equations)
 end
+
+@testset "JCGEBlocks auxiliary quantities" begin
+    sets = JCGECore.Sets([:g1], [:a1], [:lab], [:hh1])
+    mappings = JCGECore.Mappings(Dict(:a1 => :g1))
+    params = (
+        coefficient = Dict(
+            :linked => 2.0,
+            (:converted, :linked) => 0.5,
+            (:identity, :linked) => 1.0,
+            (:identity, :converted) => -2.0,
+        ),
+        capacity = Dict(:converted => 3.0),
+    )
+    initial = JCGEBlocks.InitialValuesBlock(:initial,
+        (start=Dict(:driver => 2.0),))
+    link = JCGEBlocks.quantity_link(:linked_quantity, [:linked],
+        Dict(:linked => :driver); params=(coefficient=params.coefficient,))
+    transformation = JCGEBlocks.quantity_transformation(:conversion, [:converted],
+        Dict(:converted => [:linked]);
+        params=(coefficient=params.coefficient,))
+    balance = JCGEBlocks.quantity_balance(:identity, [:identity],
+        Dict(:identity => [:linked, :converted]);
+        params=(coefficient=params.coefficient,))
+    capacity = JCGEBlocks.quantity_capacity(:limit, [:converted];
+        params=(capacity=params.capacity,))
+
+    ms = JCGECore.ModelSpec(Any[initial, link, transformation, balance, capacity],
+        sets, mappings)
+    accounting_check = JCGEBlocks.closure_condition(balance, :quantity_balance, :identity)
+    closure = JCGECore.ClosureSpec(:W;
+        condition_roles=Dict(accounting_check => :accounting_check))
+    spec = JCGECore.RunSpec("AuxiliaryQuantities", ms, closure,
+        JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    for block in spec.model.blocks
+        JCGECore.build!(block, ctx, spec)
+    end
+    JuMP.set_start_value(ctx.variables[:q_linked], 4.0)
+    JuMP.set_start_value(ctx.variables[:q_converted], 2.0)
+    JCGERuntime.compile_equations!(ctx; closure=spec.closure,
+        compile_objective=false)
+
+    @test haskey(ctx.variables, :q_linked)
+    @test haskey(ctx.variables, :q_converted)
+    @test JuMP.lower_bound(ctx.variables[:q_linked]) == 0.0
+    @test count(eq -> eq.tag == :quantity_link, ctx.equations) == 1
+    @test count(eq -> eq.tag == :quantity_transformation, ctx.equations) == 1
+    @test count(eq -> eq.tag == :quantity_balance, ctx.equations) == 1
+    @test count(eq -> eq.tag == :quantity_capacity, ctx.equations) == 1
+    @test only(filter(eq -> eq.tag == :quantity_balance, ctx.equations)).payload.constraint === nothing
+    @test all(eq -> eq.payload.constraint !== nothing,
+        filter(eq -> eq.tag in (:quantity_link, :quantity_transformation, :quantity_capacity),
+            ctx.equations))
+    @test contains_expression_reference(
+        only(filter(eq -> eq.tag == :quantity_link, ctx.equations)).payload.expr,
+        JCGECore.EParam, :coefficient)
+
+    empty_ctx = JCGERuntime.KernelContext(model=JuMP.Model())
+    @test_throws ErrorException JCGECore.build!(link, empty_ctx, spec)
+
+    @test_throws ErrorException JCGEBlocks.quantity_transformation(:invalid, [:out],
+        Dict(:out => Symbol[]); params=(coefficient=Dict(),))
+    @test_throws ErrorException JCGEBlocks.quantity_link(:invalid, [:linked],
+        Dict(:other => :driver); params=(coefficient=Dict(:linked => 1.0),))
+end

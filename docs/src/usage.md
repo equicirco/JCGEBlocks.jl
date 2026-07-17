@@ -13,6 +13,59 @@ hh = household_demand(:household, Symbol[], goods, factors; form=:cd, params=hh_
 market = composite_market_clearing(:market, goods, activities)
 ```
 
+## Auxiliary quantities
+
+The auxiliary-quantity blocks let a model make any non-monetary or otherwise
+supplementary quantity part of its equation system without imposing a domain
+or unit convention. Their identifiers and mappings are structural; all
+numerical inputs are read from named parameter sets. This makes the same
+primitives usable for physical flows, inventories, resource requirements,
+environmental pressures, stocks, or other extensions.
+
+`quantity_link` defines a quantity from an existing JCGE variable.
+`quantity_transformation` maps one or more already-defined quantities into an
+output quantity. `quantity_balance` imposes a signed identity, and
+`quantity_capacity` declares an upper limit. The order in the model matters:
+all inputs to a transformation, balance, or capacity must have been created by
+an earlier block.
+
+```julia
+# All numerical parameter sets come from the model calibration data.
+auxiliary_parameters = calibration.auxiliary_quantities
+
+linked = quantity_link(:linked_quantity, [:input_quantity],
+    Dict(:input_quantity => :Z_activity_a);
+    quantity_var=:q,
+    params=(coefficient=auxiliary_parameters.link_coefficient,),
+)
+
+converted = quantity_transformation(:conversion, [:output_quantity],
+    Dict(:output_quantity => [:input_quantity]);
+    output_var=:q,
+    input_var=:q,
+    params=(coefficient=auxiliary_parameters.transformation_coefficient,),
+)
+
+identity = quantity_balance(:quantity_identity, [:check],
+    Dict(:check => [:input_quantity, :output_quantity]);
+    quantity_var=:q,
+    params=(coefficient=auxiliary_parameters.balance_coefficient,),
+)
+
+limit = quantity_capacity(:quantity_limit, [:output_quantity];
+    quantity_var=:q,
+    params=(capacity=auxiliary_parameters.capacity,),
+)
+```
+
+The Blocks package does not label quantities with units. Attach unit and
+descriptive metadata in model data and use `JCGEOutput` satellite reporting
+for post-solution projections, calibration reports, and presentation. Use the
+Blocks primitives only when the quantity must change the equilibrium
+constraints or identities themselves. Links and transformations use a zero
+lower bound by default; pass `lower=nothing` only when a quantity is allowed
+to be signed.
+
 ## Multi-region mechanisms
 
 `regional_price_index` defines one price index per region and can also define a

@@ -10,6 +10,13 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.7] - 2026-07-17
+### Added
+- Domain- and unit-agnostic auxiliary-quantity blocks for data-driven links,
+  linear transformations, signed balance identities, and capacity constraints.
+- Structural validation that requires auxiliary-quantity inputs to be defined
+  by earlier blocks.
+
 ## [0.1.6] - 2026-07-17
 ### Fixed
 - Generic production blocks now honour an optional `positive_lower` parameter

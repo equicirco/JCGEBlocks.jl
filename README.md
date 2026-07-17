@@ -20,6 +20,8 @@ Standard CGE blocks built on the JCGE interfaces (https://jcge.org).
 - Trade blocks (Armington/CET as needed)
 - Institution blocks (households, government)
 - Market clearing blocks
+- Auxiliary-quantity blocks for model variables that must participate in
+  equilibrium equations without becoming monetary SAM accounts
 
 ## Dependencies
 - Depends on JCGECore, JCGERuntime, and the broader JCGE stack (https://jcge.org)
@@ -102,6 +104,24 @@ Inventory accounting is selected once with
 trade, market-clearing, and saving--investment blocks. See the usage guide for
 the accounting implications of each treatment.
 
+## Auxiliary quantities
+
+`quantity_link`, `quantity_transformation`, `quantity_balance`, and
+`quantity_capacity` provide a small, domain-neutral algebra for quantities
+that are connected to the equilibrium system. They can represent any
+calibrated auxiliary quantity: physical flows, technical requirements,
+environmental pressures, stocks, or policy-relevant indicators. The blocks do
+not assign units or numerical values. Mappings define the model structure and
+the named `coefficient` and `capacity` parameter sets supply all numerical
+inputs.
+
+Use `quantity_link` to connect a quantity to an existing model variable, then
+use transformations, signed balance identities, and capacities as required.
+Inputs to a transformation, balance, or capacity block must have been defined
+by an earlier block. Use `JCGEOutput` satellite reporting when a quantity is
+only reported after a solve; use these Blocks primitives when it must constrain
+or otherwise participate in the equilibrium model.
+
 ## Block catalog
 
 - Production and activity: `ProductionBlock`, `ProductionCDBlock`,
@@ -146,3 +166,5 @@ the accounting implications of each treatment.
   `HouseholdIncomeLaborCapitalBlock`, `HouseholdTaxRevenueBlock`,
   `HouseholdIncomeSumBlock`, `ImportPremiumIncomeBlock`, `GDPIncomeBlock`,
   `ConsumptionObjectiveBlock`, and `InitialValuesBlock`.
+- Auxiliary quantities: `QuantityLinkBlock`, `QuantityTransformationBlock`,
+  `QuantityBalanceBlock`, and `QuantityCapacityBlock`.

@@ -97,6 +97,10 @@ export FinalDemandClearingBlock
 export ConsumptionObjectiveBlock
 export ExternalBalanceRemitBlock
 export InitialValuesBlock
+export QuantityLinkBlock
+export QuantityTransformationBlock
+export QuantityBalanceBlock
+export QuantityCapacityBlock
 export InventoryTreatment
 export apply_start
 export rerun!
@@ -105,6 +109,10 @@ export inventory_treatment
 export production
 export production_sector_pf
 export production_multilabor_cd
+export quantity_link
+export quantity_transformation
+export quantity_balance
+export quantity_capacity
 
 function mcp_enabled(params)
     return hasproperty(params, :mcp) && params.mcp === true
@@ -5823,5 +5831,6 @@ function rerun!(spec::JCGECore.RunSpec; from, optimizer=nothing,
 end
 
 include("multiregion.jl")
+include("quantities.jl")
 
 end # module

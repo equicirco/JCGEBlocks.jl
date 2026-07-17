@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: JCGEBlocks.jl - Reusable CGE blocks for JCGE.
 message: >-
-  v0.1.6 - Makes production-block positive lower bounds configurable from model calibration.
+  v0.1.7 - Adds generic auxiliary-quantity links, transformations, balances, and capacity constraints.
 type: software
 doi: 10.5281/zenodo.18290873
 authors:
