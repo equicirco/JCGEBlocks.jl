@@ -306,6 +306,9 @@ Inputs:
 Typical parameters (by form):
 - Cobb-Douglas: `beta[h,i]`, `b[i]`, `ax[j,i]`, `ay[i]`
 - Leontief nests: see `ProductionCDLeontiefBlock` for required coefficients.
+- `positive_lower` (optional): strictly positive lower bound for outputs,
+  factor inputs, and prices. When omitted, the historic `1e-5` default is
+  retained.
 
 Variables (global names):
 - Output/composite: `Y[i]`, `Z[i]`
@@ -1966,6 +1969,13 @@ function ensure_var!(ctx::JCGERuntime.KernelContext, model, name::Symbol; lower=
     return v
 end
 
+function _production_positive_lower(params::NamedTuple)
+    hasproperty(params, :positive_lower) || return 1.0e-5
+    lower = Float64(getproperty(params, :positive_lower))
+    lower > 0.0 || error("params.positive_lower must be strictly positive.")
+    return lower
+end
+
 function register_eq!(ctx::JCGERuntime.KernelContext, block::ProductionCDLeontiefBlock, tag::Symbol, idxs::Symbol...; info=nothing, expr=nothing, index_names=nothing, constraint=nothing, mcp_var=nothing, objective_expr=nothing, objective_sense=nothing)
     JCGERuntime.register_equation!(ctx; tag=tag, block=block.name, payload=_build_payload(block, idxs, index_names, info, expr, constraint, mcp_var, objective_expr, objective_sense))
     return nothing
@@ -1991,6 +2001,7 @@ function JCGECore.build!(block::ProductionCDLeontiefBlock, ctx::JCGERuntime.Kern
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
 
     model = ctx.model
+    lower = _production_positive_lower(block.params)
     Y = Dict{Symbol,Any}()
     Z = Dict{Symbol,Any}()
     py = Dict{Symbol,Any}()
@@ -2001,22 +2012,22 @@ function JCGECore.build!(block::ProductionCDLeontiefBlock, ctx::JCGERuntime.Kern
     X = Dict{Tuple{Symbol,Symbol},Any}()
 
     for i in activities
-        Y[i] = ensure_var!(ctx, model, var_name(block, :Y, i))
-        Z[i] = ensure_var!(ctx, model, var_name(block, :Z, i))
-        py[i] = ensure_var!(ctx, model, var_name(block, :py, i))
-        pz[i] = ensure_var!(ctx, model, var_name(block, :pz, i))
+        Y[i] = ensure_var!(ctx, model, var_name(block, :Y, i); lower=lower)
+        Z[i] = ensure_var!(ctx, model, var_name(block, :Z, i); lower=lower)
+        py[i] = ensure_var!(ctx, model, var_name(block, :py, i); lower=lower)
+        pz[i] = ensure_var!(ctx, model, var_name(block, :pz, i); lower=lower)
     end
 
     for j in commodities
-        pq[j] = ensure_var!(ctx, model, var_name(block, :pq, j))
+        pq[j] = ensure_var!(ctx, model, var_name(block, :pq, j); lower=lower)
     end
 
     for h in factors
-        pf[h] = ensure_var!(ctx, model, var_name(block, :pf, h))
+        pf[h] = ensure_var!(ctx, model, var_name(block, :pf, h); lower=lower)
     end
 
     for h in factors, i in activities
-        F[(h, i)] = ensure_var!(ctx, model, var_name(block, :F, h, i))
+        F[(h, i)] = ensure_var!(ctx, model, var_name(block, :F, h, i); lower=lower)
     end
 
     for j in commodities, i in activities
@@ -2120,6 +2131,7 @@ function JCGECore.build!(block::ProductionCDLeontiefSectorPFBlock, ctx::JCGERunt
     commodities = isempty(block.commodities) ? spec.model.sets.commodities : block.commodities
 
     model = ctx.model
+    lower = _production_positive_lower(block.params)
     Y = Dict{Symbol,Any}()
     Z = Dict{Symbol,Any}()
     py = Dict{Symbol,Any}()
@@ -2130,19 +2142,19 @@ function JCGECore.build!(block::ProductionCDLeontiefSectorPFBlock, ctx::JCGERunt
     X = Dict{Tuple{Symbol,Symbol},Any}()
 
     for i in activities
-        Y[i] = ensure_var!(ctx, model, var_name(block, :Y, i))
-        Z[i] = ensure_var!(ctx, model, var_name(block, :Z, i))
-        py[i] = ensure_var!(ctx, model, var_name(block, :py, i))
-        pz[i] = ensure_var!(ctx, model, var_name(block, :pz, i))
+        Y[i] = ensure_var!(ctx, model, var_name(block, :Y, i); lower=lower)
+        Z[i] = ensure_var!(ctx, model, var_name(block, :Z, i); lower=lower)
+        py[i] = ensure_var!(ctx, model, var_name(block, :py, i); lower=lower)
+        pz[i] = ensure_var!(ctx, model, var_name(block, :pz, i); lower=lower)
     end
 
     for j in commodities
-        pq[j] = ensure_var!(ctx, model, var_name(block, :pq, j))
+        pq[j] = ensure_var!(ctx, model, var_name(block, :pq, j); lower=lower)
     end
 
     for h in factors, i in activities
-        pf[(h, i)] = ensure_var!(ctx, model, var_name(block, :pf, h, i))
-        F[(h, i)] = ensure_var!(ctx, model, var_name(block, :F, h, i))
+        pf[(h, i)] = ensure_var!(ctx, model, var_name(block, :pf, h, i); lower=lower)
+        F[(h, i)] = ensure_var!(ctx, model, var_name(block, :F, h, i); lower=lower)
     end
 
     for j in commodities, i in activities
@@ -2238,6 +2250,7 @@ function JCGECore.build!(block::ProductionCDBlock, ctx::JCGERuntime.KernelContex
     activities = isempty(block.activities) ? spec.model.sets.activities : block.activities
     factors = isempty(block.factors) ? spec.model.sets.factors : block.factors
     model = ctx.model
+    lower = _production_positive_lower(block.params)
 
     Z = Dict{Symbol,Any}()
     pz = Dict{Symbol,Any}()
@@ -2245,14 +2258,14 @@ function JCGECore.build!(block::ProductionCDBlock, ctx::JCGERuntime.KernelContex
     F = Dict{Tuple{Symbol,Symbol},Any}()
 
     for j in activities
-        Z[j] = ensure_var!(ctx, model, global_var(:Z, j))
-        pz[j] = ensure_var!(ctx, model, global_var(:pz, j))
+        Z[j] = ensure_var!(ctx, model, global_var(:Z, j); lower=lower)
+        pz[j] = ensure_var!(ctx, model, global_var(:pz, j); lower=lower)
     end
     for h in factors
-        pf[h] = ensure_var!(ctx, model, global_var(:pf, h))
+        pf[h] = ensure_var!(ctx, model, global_var(:pf, h); lower=lower)
     end
     for h in factors, j in activities
-        F[(h, j)] = ensure_var!(ctx, model, global_var(:F, h, j))
+        F[(h, j)] = ensure_var!(ctx, model, global_var(:F, h, j); lower=lower)
     end
 
     for j in activities

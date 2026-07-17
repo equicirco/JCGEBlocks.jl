@@ -10,6 +10,12 @@ Removed: For features removed in this release.
 Fixed: For any bug fixes.
 Security: For vulnerabilities.
 
+## [0.1.6] - 2026-07-17
+### Fixed
+- Generic production blocks now honour an optional `positive_lower` parameter
+  for outputs, factor inputs, and prices, allowing calibrated models with
+  small observed activities to retain their feasible reference point.
+
 ## [0.1.5] - 2026-07-17
 ### Fixed
 - Removed unused direct multiplications from `AbsorptionSalesBlock` so it

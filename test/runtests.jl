@@ -56,6 +56,27 @@ end
     @test !isempty(ctx.equations)
 end
 
+@testset "JCGEBlocks production positive lower bound" begin
+    sets = JCGECore.Sets([:g1], [:a1], [:lab], [:hh])
+    mappings = JCGECore.Mappings(Dict(:a1 => :g1))
+    params = (
+        b = Dict(:a1 => 1.0),
+        beta = Dict((:lab, :a1) => 1.0),
+        ay = Dict(:a1 => 1.0),
+        ax = Dict((:g1, :a1) => 0.0),
+        positive_lower = 1.0e-9,
+    )
+    block = JCGEBlocks.ProductionBlock(:production_lower, Symbol[], Symbol[], Symbol[], :cd_leontief, params)
+    ms = JCGECore.ModelSpec(Any[block], sets, mappings)
+    spec = JCGECore.RunSpec("BlocksTest", ms, JCGECore.ClosureSpec(:W), JCGECore.ScenarioSpec(:baseline, Dict{Symbol,Any}()))
+    ctx = JCGERuntime.KernelContext(model = JuMP.Model())
+    JCGECore.build!(block, ctx, spec)
+    @test JuMP.lower_bound(ctx.variables[JCGEBlocks.global_var(:Z, :a1)]) == 1.0e-9
+    @test JuMP.lower_bound(ctx.variables[JCGEBlocks.global_var(:F, :lab, :a1)]) == 1.0e-9
+    @test JuMP.lower_bound(ctx.variables[JCGEBlocks.global_var(:pq, :g1)]) == 1.0e-9
+    @test JuMP.lower_bound(ctx.variables[JCGEBlocks.global_var(:X, :g1, :a1)]) == 0.0
+end
+
 @testset "JCGEBlocks.FactorSupplyBlock" begin
     sets = JCGECore.Sets([:g1], [:a1], [:lab, :cap], [:hh])
     mappings = JCGECore.Mappings(Dict(:a1 => :g1))
