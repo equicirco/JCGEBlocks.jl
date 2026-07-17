@@ -4811,7 +4811,6 @@ function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelCon
         end
         _inventory_is_stock_change(block.inventory) &&
             ensure_var!(ctx, model, global_var(:dst, i))
-        term_m = i in traded ? pm * m : 0.0
         constraint = nothing
         term_m_expr = i in traded ? EMul([EVar(:pm, Any[EIndex(:i)]), EVar(:m, Any[EIndex(:i)])]) : EConst(0.0)
         expr = EEq(
@@ -4830,7 +4829,6 @@ function JCGECore.build!(block::AbsorptionSalesBlock, ctx::JCGERuntime.KernelCon
         xd = ensure_var!(ctx, model, global_var(:xd, i))
         pe = ensure_var!(ctx, model, global_var(:pe, i))
         e = ensure_var!(ctx, model, global_var(:e, i))
-        term_e = i in traded ? pe * e : 0.0
         constraint = nothing
         term_e_expr = i in traded ? EMul([EVar(:pe, Any[EIndex(:i)]), EVar(:e, Any[EIndex(:i)])]) : EConst(0.0)
         expr = EEq(

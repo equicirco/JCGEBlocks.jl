@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: JCGEBlocks.jl - Reusable CGE blocks for JCGE.
 message: >-
-  v0.1.4 - Adds consistent inventory treatments across single-region and multi-region blocks.
+  v0.1.5 - Fixes symbolic-context construction for inventory-treatment tests.
 type: software
 doi: 10.5281/zenodo.18290873
 authors:
